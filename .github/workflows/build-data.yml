@@ -1,0 +1,32 @@
+# data/raw/inbox/ 에 이마트 원본(xlsx/csv)을 올리면 자동으로 data/YYYY-MM.js 로 변환해서 커밋합니다.
+name: 이마트 POS 데이터 변환
+on:
+  push:
+    paths: ['data/raw/inbox/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install openpyxl
+      - name: 원본 변환
+        run: |
+          shopt -s nullglob
+          files=(data/raw/inbox/*.xlsx data/raw/inbox/*.csv)
+          if [ ${#files[@]} -eq 0 ]; then echo "변환할 파일이 없습니다"; exit 0; fi
+          python tools/build_month.py "${files[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+          mkdir -p data/raw/done
+          for f in "${files[@]}"; do git mv "$f" "data/raw/done/$(date +%Y%m%d-%H%M)_$(basename "$f")"; done
+      - name: 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data
+          git diff --cached --quiet || git commit -m "data: 이마트 POS 원본 변환 $(date +%F)"
+          git push

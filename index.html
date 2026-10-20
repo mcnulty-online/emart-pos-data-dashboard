@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>이마트 POS 대시보드</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div id="boot" class="boot">데이터를 불러오는 중…</div>
+
+<div class="wrap">
+<header class="top">
+  <div>
+    <h1>이마트 POS 대시보드 · 맥널티커피</h1>
+    <div class="sub" id="hdr-sub"></div>
+  </div>
+</header>
+
+<nav class="sheets" id="sheets">
+  <button data-s="sales" class="on">판매분석</button>
+  <button data-s="ns">미매출현황</button>
+  <button data-s="pr">행사현황</button>
+</nav>
+<div class="pbar" id="pbar">
+  <div class="fld">기간 보기<div class="seg" id="pmode"><button data-v="m" class="on">월별</button><button data-v="c">누적</button></div></div>
+  <div class="fld" id="pmon-l">월 선택<div class="seg" id="pmon"></div></div>
+  <label class="fld">주차<select id="pwk"></select></label>
+  <div class="pcur" id="pcur"></div>
+  <div style="flex-basis:100%;height:0"></div>
+  <div class="fld">점포 범위<div class="seg" id="sch"><button data-v="all" class="on">전체</button><button data-v="off">오프라인 점포만</button><button data-v="on">온라인 가상점만</button></div></div>
+  <label class="fld">매출규모<select id="stier"></select></label>
+  <label class="fld">매출 상위<select id="stop"></select></label>
+  <div class="pcur" id="scur"></div>
+</div>
+
+<!-- ================= 시트: 판매분석 ================= -->
+<section class="sheet on" id="sh-sales">
+
+<div class="filters" id="filters">
+  <label>점포유형<select id="f-type"></select></label>
+  <label>점포<select id="f-store"></select></label>
+  <label>중분류<select id="f-mid"></select></label>
+  <label>소분류<select id="f-sub"></select></label>
+  <label>브랜드<select id="f-brand"></select></label>
+  <label>상품<select id="f-prod"></select></label>
+  <div class="fld">지표<div class="seg" id="metric"><button data-m="a" class="on">판매금액</button><button data-m="q">판매수량</button></div></div>
+  <button class="btn" id="reset">필터 초기화</button>
+  <div class="active-f" id="active-f"></div>
+</div>
+
+<section class="kpis" id="kpis"></section>
+
+<nav class="tabs" id="tabs">
+  <button data-t="ov" class="on">개요 · 추이</button>
+  <button data-t="pr">상품별</button>
+  <button data-t="st">점포별</button>
+  <button data-t="dy">일자별 · 매트릭스</button>
+  <button data-t="cv">도입 점포 현황</button>
+  <button data-t="an">분석 · 진단 · 영업전략</button>
+</nav>
+
+<!-- 개요 -->
+<section class="panel on" id="p-ov">
+  <div class="grid g2">
+    <div class="card"><h3 id="ov-t1">일별 추이</h3><p class="desc" id="ov-d1"></p><div class="chart" id="c-daily"></div></div>
+    <div class="card"><h3 id="ov-t2">누계 추이</h3><p class="desc" id="ov-d2"></p><div class="chart" id="c-cum"></div></div>
+  </div>
+  <div class="grid g2" style="margin-top:12px">
+    <div class="card"><h3>소분류별 실적</h3><p class="desc" id="ov-d3"></p><div class="chart" id="c-sub"></div></div>
+    <div class="card"><h3>요일별 일평균</h3><p class="desc">해당 요일의 일평균 (의무휴업·명절 포함)</p><div class="chart" id="c-dow"></div>
+      <h3 style="margin-top:16px">점포유형별 요약</h3><div id="t-type" style="margin-top:6px"></div></div>
+  </div>
+</section>
+
+<!-- 상품별 -->
+<section class="panel" id="p-pr">
+  <div id="d-prod"></div>
+  <div class="card">
+    <div class="card-h"><div><h3>상품별 현황</h3><p class="desc">도입 점포수 = 해당 기간 POS 판매수량이 1개 이상인 점포 수. 점당매출 = 선택 기간 판매금액 ÷ 선택 기간 도입 점포수. 행을 클릭하면 상품 상세(일별 추이·점포 순위·미판매/이탈 점포)가 열립니다.</p></div></div>
+    <div class="tbl-tools"><input type="search" id="s-prod" placeholder="상품명 검색"><button class="btn sm" id="x-prod">CSV 내보내기</button></div>
+    <div class="tbl-wrap" id="t-prod"></div>
+  </div>
+</section>
+
+<!-- 점포별 -->
+<section class="panel" id="p-st">
+  <div id="d-store"></div>
+  <div class="card">
+    <div class="card-h"><div><h3>점포별 현황</h3><p class="desc">판매 SKU = 해당 기간 판매수량 1개 이상인 상품 수. 행을 클릭하면 점포 상세(일별 추이·상품 구성·미판매 주력 SKU)가 열립니다.</p></div></div>
+    <div class="tbl-tools"><input type="search" id="s-store" placeholder="점포명 검색"><button class="btn sm" id="x-store">CSV 내보내기</button></div>
+    <div class="tbl-wrap" id="t-store"></div>
+  </div>
+</section>
+
+<!-- 일자별 -->
+<section class="panel" id="p-dy">
+  <div class="card">
+    <div class="card-h"><div><h3>일자별 상세</h3><p class="desc" id="dy-d1"></p></div><button class="btn sm" id="x-day">CSV 내보내기</button></div>
+    <div class="tbl-wrap" id="t-day"></div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="card-h"><div><h3>일자 매트릭스</h3><p class="desc" id="mx-desc"></p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div class="seg" id="mx-dim"><button data-v="s" class="on">점포 × 일자</button><button data-v="p">상품 × 일자</button></div>
+        <button class="btn sm" id="x-mx">CSV 내보내기</button>
+      </div></div>
+    <div class="tbl-wrap" id="t-mx" style="max-height:640px"></div>
+  </div>
+</section>
+
+<!-- 도입 현황 -->
+<section class="panel" id="p-cv">
+  <div class="grid g32">
+    <div class="card"><h3 id="cv-t1">도입 점포수 × 점당매출</h3><p class="desc">점선은 중앙값. 왼쪽 위 = 점당매출은 높은데 도입 점포가 적은 <b>입점 확대 기회</b> 상품</p><div class="chart" id="c-sc"></div></div>
+    <div class="card"><h3 id="cv-t2">도입 점포수 증감</h3><p class="desc" id="cv-d2">도입 점포가 늘거나 줄어든 상품</p><div class="chart" id="c-cvd"></div></div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="card-h"><div><h3>상품별 도입 점포 현황</h3><p class="desc" id="cv-d3"></p></div><button class="btn sm" id="x-cv">CSV 내보내기</button></div>
+    <div class="tbl-wrap" id="t-cv"></div>
+  </div>
+</section>
+
+<!-- 분석 -->
+<section class="panel" id="p-an">
+<div class="fixed-note">이 분석 리포트는 <b>9월(당월) 실적 기준</b>으로 작성된 고정 리포트입니다. 상단 기간·필터 선택과 연동되지 않습니다.</div>
+<div class="ana">
+<h2>1. 핵심 요약</h2>
+<div class="headline">
+  <div class="card"><div class="s">9월 판매금액 (전체 135점)</div><div class="big">1억 4,410만원</div><div class="s"><span class="up">▲2.2%</span> (+316만원) · 일평균 <span class="up">▲5.7%</span><br>수량 20,223개 <span class="down">▼2.9%</span></div></div>
+  <div class="card"><div class="s">채널 양극화</div><div class="big"><span class="up">+6.6%</span> / <span class="down">−29.9%</span></div><div class="s">오프라인 132점 +822만원<br>온라인 가상점 3점 −506만원</div></div>
+  <div class="card"><div class="s">추석 연휴(9/24~27) 영향</div><div class="big">약 −670만원</div><div class="s">연휴 4일 1,339만원 vs 평시 4일 2,011만원<br>연휴 영향 제외 시 단순 추정 약 +7%</div></div>
+  <div class="card"><div class="s">성장 축 vs 부진 축</div><div class="big" style="font-size:18px">차류 +103% · 믹스 +19%</div><div class="s">원두 −8.1% · 블랙커피(PB) −7.5%<br>계절 전환 + 스테비아 라인 성장</div></div>
+</div>
+<p>9월은 <b>추석 연휴와 영업일 1일 감소에도 금액 기준 성장</b>했습니다. 다만 성장의 질은 엇갈립니다. 오프라인은 겨울 차류·스테비아 믹스의 신장으로 견조했고, <b>온라인 가상점과 노브랜드 PB(까페N)의 물량 감소</b>가 전체 성장률을 끌어내렸습니다. 수량이 줄고 금액이 늘어난 것은 8월 행사가(아이스티 등)에서 9월 정상가로 돌아오고 고단가 차류 비중이 커졌기 때문입니다.</p>
+
+<h2>2. 진단</h2>
+<div class="diag">
+  <div class="card"><h4><span class="tag neg">위험</span>온라인 가상점 급감 (−506만원)</h4>
+    <ul>
+      <li>오포몰 <span class="num">−319만원(−39.2%)</span>, 보정몰 <span class="num">−125만원(−37.9%)</span>, 김포2몰 <span class="num">−61만원(−11.2%)</span></li>
+      <li>판매 SKU 수 축소: 오포 30→26, 보정 22→15, 김포2 25→20개</li>
+      <li>감소를 이끈 상품: 노브랜드 까페N 헤이즐넛(824→472개, −179만원), 블루마운틴 홀빈 1kg(−68만원), 까페N 블랙(−53만원), 리치헤즐넛 분쇄 1kg(−52만원)</li>
+      <li>가상점은 판매가 특정 일자에 몰립니다(매트릭스 탭 참고). 매일 팔리는 오프라인과 달리 출고·행사 일정에 따라 월 실적이 크게 흔들리는 구조입니다.</li>
+      <li>하와이안코나 500g·레몬즙·아이스티 2종·제로슈가 믹스는 9월 온라인 판매가 0입니다. <b>결품이거나 온라인 운영에서 빠진 것으로 보입니다.</b></li>
+    </ul></div>
+  <div class="card"><h4><span class="tag neg">위험</span>노브랜드 PB(까페N) 물량 둔화</h4>
+    <ul>
+      <li>2종 합계 <span class="num">4,560만→4,079만원(−10.5%)</span>, 매출 비중 32.4%→28.3%</li>
+      <li>오프라인 −6.6%, 온라인 −29.7%. 판매 점포는 122점으로 같아서 <b>문제는 점포 수가 아니라 점포당 판매속도</b>입니다.</li>
+      <li>8/1~2, 9/19~20에 일시적으로 급증했습니다(행사 추정). 행사가 있는 날과 없는 날의 차이가 커서 정기 행사 운영이 판매량을 좌우합니다.</li>
+    </ul></div>
+  <div class="card"><h4><span class="tag pos">기회</span>계절 전환: 겨울 차류 급성장</h4>
+    <ul>
+      <li>유자차 45→247개(<span class="num">+418%</span>, 23→34점), 율무차 67→277개(<span class="num">+296%</span>, 22→40점), 핫초코 +21%(42→51점), 쌍화차 신규(3점)</li>
+      <li>4종 합계 <span class="num">304만→719만원(+136%)</span></li>
+      <li>오프라인 점당매출: 유자차 <b>6.3만원</b>, 율무차 <b>6.1만원</b>로 노브랜드·1kg 원두 다음 수준입니다. 그런데 <b>도입 점포는 34~40점에 그칩니다</b>. 매출 상위 43점 중 유자차 미판매 20점, 율무차 17점, 핫초코 23점</li>
+    </ul></div>
+  <div class="card"><h4><span class="tag pos">기회</span>스테비아·단백질 믹스 라인 신장</h4>
+    <ul>
+      <li>믹스커피 소분류 <span class="num">1,683만→2,011만원(+19.4%)</span></li>
+      <li>단백질 100입 +63%(42→57점), 솔티드카라멜 30입 +73%(47→52점), 산양유 30입 +45%(89→99점), 950g +31%(91→105점), 디카페인 100입 +21%(92→98점)</li>
+      <li>반면 스테비아 30입 −13.7%, 제로슈가 80입 −17.4%: 같은 라인 안에서도 <b>대용량·기능성(단백질·디카페인) 쪽으로 수요가 옮겨가고</b> 있습니다.</li>
+    </ul></div>
+  <div class="card"><h4><span class="tag neg">주의</span>원두 포트폴리오 약세 (−8.1%)</h4>
+    <ul>
+      <li>행복을주는커피 500g 4종 <span class="num">1,316만→1,096만원(−16.7%)</span>: 하와이안코나 −22%, 게이샤 −15%, 디카페인 −12%, 예멘모카 판매 0</li>
+      <li>9월 판매단가가 1~7% 내려갔는데도(할인) 수량이 줄었습니다. <b>가격 탄력성이 낮습니다.</b></li>
+      <li>1kg 홀빈 −4.3%, 리치헤즐넛 분쇄 1kg만 +4.3%로 성장</li>
+      <li>분쇄 226g 진열 이탈: 브라질산토스 35→15점(−62%), 디카페인 헤이즐넛 12→5점</li>
+    </ul></div>
+  <div class="card"><h4><span class="tag neu">구조</span>아이스티 시즌 막바지 · 꼬리 SKU</h4>
+    <ul>
+      <li>아이스티 청포도 +215%, 복숭아 +165%. 단가가 8월 4.7천원대(행사가 추정)에서 9월 8.8천원대(정상가)로 돌아왔는데도 수량이 늘었습니다. 다만 도입 점포는 94→79점, 71→59점으로 줄어 <b>시즌 종료 신호</b>가 보입니다.</li>
+      <li>레몬즙 877→387개(−56%), 도입 71→40점</li>
+      <li>9월 판매 0~1개: 예멘모카 500g, 시그니처 디카페인 핸드드립, 코케허니 7입, 예가체프 G2 핸드드립, 케냐AA(1개)</li>
+    </ul></div>
+  <div class="card"><h4><span class="tag neu">구조</span>점포: 매출은 진열 SKU 폭이 좌우</h4>
+    <ul>
+      <li>135점 중 83점 증가, 52점 감소. 상위 43점이 매출의 50%, 85점이 80%를 차지합니다.</li>
+      <li>오프라인 점포의 <b>판매 SKU 증감과 매출 증감의 상관계수는 0.57</b>입니다. SKU가 3개 이상 줄어든 29점은 매출 중앙값 −10%, SKU가 늘어난 62점은 중앙값 +16%였습니다.</li>
+      <li>하락 상위: 춘천 −54만원(SKU 34→26), 보령 −48만원(31→18), 순천 −34만원(35→28), 수지 −33만원(25→20), 광산 −32만원(34→24)</li>
+      <li>상승 상위: 왕십리 +68만원(26→33), 만촌 +59만원(30→34), 성남 +55만원, 김포한강 +48만원, 문현 +42만원</li>
+    </ul></div>
+  <div class="card"><h4><span class="tag neu">패턴</span>요일·캘린더</h4>
+    <ul>
+      <li>9월 요일별 일평균: 토 612만원으로 가장 높고, 화 395만원으로 가장 낮습니다.</li>
+      <li>의무휴업 추정 일요일(8/9, 8/23, 9/13, 9/27)은 190~360만원이었습니다. 영업한 일요일(580~860만원)의 절반 이하입니다.</li>
+      <li>급증 구간: 8/13~16(광복절 연휴), 9/3~6(일평균 795만원. 1kg 원두와 까페N이 함께 늘어 행사로 추정), 9/19~20(까페N·아이스티)</li>
+      <li>추석 당일(9/25) 231만원, 9/27 193만원으로 바닥을 찍은 뒤 9/30에 618만원으로 반등했습니다.</li>
+    </ul></div>
+</div>
+
+<h2>3. 영업전략 (10~11월 실행안)</h2>
+<div class="tbl-wrap" style="max-height:none">
+<table class="t plan">
+<thead><tr><th style="width:52px">순위</th><th style="width:190px">과제</th><th>대상 · 근거</th><th>실행 방안</th><th style="width:200px">KPI · 기대효과</th></tr></thead>
+<tbody>
+<tr><td class="prio">1</td><td><b>온라인 가상점 매출 회복</b></td><td>오포·보정·김포2 가상점. 9월 −506만원, 판매 SKU 77→61개</td><td>SKU별 재고·결품 점검(9월 판매 0 SKU 우선), 까페N 헤이즐넛·1kg 원두 SSG 행사 슬롯 재확보, 가상점 발주 패턴 확인</td><td>10월 가상점 매출 8월 수준(약 1,690만원) 회복, 점별 판매 SKU 25개 이상</td></tr>
+<tr><td class="prio">2</td><td><b>겨울 차류 입점 확대</b></td><td>유자차(34점)·율무차(40점)·핫초코(51점)·쌍화차(3점). 점당매출 4.8~6.3만원으로 상위권</td><td>상위 43점 중 미판매 점포(유자차 20점, 율무차 17점, 핫초코 23점)부터 입점 제안. 스테비아 믹스 옆 연관진열과 엔드캡 확보</td><td>도입 점포 각 80점 이상. 시뮬레이션 기대효과 월 +약 700만원*</td></tr>
+<tr><td class="prio">3</td><td><b>스테비아·단백질 믹스 라인 확장</b></td><td>단백질 100입(57점, +63%), 솔티드카라멜(52점), 헤이즐넛 100입(49점)</td><td>950g·디카페인 100입 운영점(95~105점)에 라인업 추가 제안. 기능성(단백질·디카페인) 묶음 진열, 30입 저회전 SKU와 교체</td><td>단백질 100입 도입 80점, 믹스 소분류 MoM +10% 유지</td></tr>
+<tr><td class="prio">4</td><td><b>PB 까페N 물량 방어</b></td><td>매출 비중 28%, 9월 −10.5%. 122점에 이미 도입됨(문제는 판매속도)</td><td>이마트 PB MD와 월 1~2회 정기 행사 협의. 행사는 주말과 의무휴업 전 토요일에 배치. 온라인 가격·노출 점검</td><td>2종 월 4,500만원대 회복</td></tr>
+<tr><td class="prio">5</td><td><b>원두 500g 라인 재정비</b></td><td>행복을주는커피 500g −16.7%. 할인에도 수량이 감소. 분쇄 226g 진열 이탈(브라질 −20점, 디카페인 헤이즐넛 −7점)</td><td>할인 대신 시음·진열 위치 개선. 1kg·디카페인 중심으로 재배치. 이탈 점포에 재진열 요청(상품 상세 &gt; 이탈 점포 목록 활용)</td><td>500g 라인 −5% 이내로 하락 제한, 226g 도입 점포를 8월 수준으로 복구</td></tr>
+<tr><td class="prio">6</td><td><b>아이스티 시즌 아웃 관리</b></td><td>청포도·복숭아·레몬즙. 도입 점포가 이미 줄기 시작함</td><td>10월 재고 소진 행사를 하고 반품 리스크를 점검. 빠진 진열면은 과제 2의 겨울 차류로 전환</td><td>11월 말 점포 재고 최소화</td></tr>
+<tr><td class="prio">7</td><td><b>꼬리 SKU 정리</b></td><td>9월 판매 0~1개 5종(예멘모카, 시그니처 디카페인 핸드드립, 코케허니, 예가체프 G2, 케냐AA)</td><td>단종·대체 제안서 작성. 확보한 면적은 과제 2·3 SKU로 교체</td><td>SKU 생산성(점당매출) 개선</td></tr>
+<tr><td class="prio">8</td><td><b>점포 커버리지 현장 관리</b></td><td>SKU가 3개 이상 줄어든 29점(춘천·보령·순천·수지·광산·안산고잔 등). SKU 증감과 매출의 상관계수 0.57</td><td>결품·진열 축소 원인 파악 후 복구. Tier A(상위 43점, 매출 50%)는 주 1회, B(42점)는 격주, C(나머지)는 월 1회 순회. 점포 상세의 '미판매 주력 SKU'를 체크리스트로 활용</td><td>점당 판매 SKU 24.7개 → 27개</td></tr>
+</tbody></table></div>
+<p class="note">* 시뮬레이션: 유자차·율무차·핫초코·단백질 100입을 각각 오프라인 100점까지 확대하고, 신규 점포의 점당매출을 기존 점포의 60%로 가정했습니다. 유자차 +248만, 율무차 +218만, 핫초코 +141만, 단백질 100입 +105만원으로 합계 월 약 +711만원(9월 매출 대비 +4.9%)입니다.</p>
+
+<h2>4. 데이터 정의 · 유의사항</h2>
+<ul>
+  <li><b>도입 점포수</b>: 해당 월 POS 판매수량이 1개 이상인 점포 수입니다. 취급하지만 그 달에 판매가 없었던 점포는 포함되지 않으므로 실제 취급 점포수보다 작을 수 있습니다. '미판매' 점포에는 미입점과 결품이 섞여 있습니다.</li>
+  <li><b>판매금액</b>: POS 판매금액(반품 반영 순매출)입니다. 판매단가 변화는 행사·할인 영향을 포함합니다.</li>
+  <li><b>MoM</b>: 8월은 31일, 9월은 30일입니다. 월 합계 MoM과 일평균 MoM을 함께 보는 것이 좋습니다.</li>
+  <li><b>의무휴업일</b>: 둘째·넷째 일요일 기준 추정입니다. 평일 휴업으로 바꾼 지역도 있어 점포마다 다를 수 있습니다.</li>
+  <li><b>점포유형</b>: 점포명 접두어(EM/SFM/EMF·EMFC/가상점)로 분류했습니다.</li>
+</ul>
+
+</div>
+</section>
+
+</section>
+<!-- ================= /시트: 판매분석 ================= -->
+
+<!-- ================= 시트: 미매출현황 ================= -->
+<section class="sheet" id="sh-ns">
+<div class="filters">
+  <label>점포유형<select id="ns-type"></select></label>
+  <label>중분류<select id="ns-mid"></select></label>
+  <label>브랜드<select id="ns-brand"></select></label>
+  <div class="fld">미매출 기준 (연속 무판매 일수)<div class="seg" id="ns-days"><button data-v="3">3일</button><button data-v="5">5일</button><button data-v="7" class="on">7일</button><button data-v="14">14일</button></div></div>
+  <div class="active-f" id="ns-win"></div>
+  <div class="active-f" id="ns-rec"></div>
+</div>
+
+<section class="kpis" id="ns-kpis"></section>
+
+<div class="grid g2">
+  <div class="card"><h3>전 품목 미매출 점포</h3><p class="desc">최근 <span class="ns-n">7</span>일 동안 맥널티 상품이 하나도 팔리지 않은 점포 (이전 판매 이력 있음). 클릭하면 아래 상세가 그 점포로 좁혀집니다.</p><div id="ns-dead-s"></div></div>
+  <div class="card"><h3>전 점포 미매출 품목</h3><p class="desc">최근 <span class="ns-n">7</span>일 동안 어느 점포에서도 팔리지 않은 품목 (이전 판매 이력 있음). 클릭하면 아래 상세가 그 품목으로 좁혀집니다.</p><div id="ns-dead-p"></div></div>
+</div>
+
+<div class="grid g2" style="margin-top:12px">
+  <div class="card"><div class="card-h"><div><h3>점포별 미매출 품목</h3><p class="desc">판매 이력 품목 = <span class="ns-n">7</span>일 이전에 한 번이라도 팔린 품목. 행 클릭 시 아래 상세 필터</p></div><button class="btn sm" id="ns-x-s">CSV</button></div>
+    <div class="tbl-tools"><input type="search" id="ns-s-s" placeholder="점포명 검색"></div><div class="tbl-wrap" id="ns-t-s" style="max-height:420px"></div></div>
+  <div class="card"><div class="card-h"><div><h3>품목별 미매출 점포</h3><p class="desc">판매 이력 점포 = <span class="ns-n">7</span>일 이전에 한 번이라도 판매한 점포. 행 클릭 시 아래 상세 필터</p></div><button class="btn sm" id="ns-x-p">CSV</button></div>
+    <div class="tbl-tools"><input type="search" id="ns-s-p" placeholder="상품명 검색"></div><div class="tbl-wrap" id="ns-t-p" style="max-height:420px"></div></div>
+</div>
+
+<div class="card" style="margin-top:12px">
+  <div class="card-h"><div><h3>점포 × 품목 미매출 상세</h3><p class="desc">해당 점포에서 팔린 적이 있는데 최근 <span class="ns-n">7</span>일 연속 판매가 없는 품목. 직전 30일 실적이 큰 순 = 놓치고 있는 매출이 큰 순입니다. <b><span class="ns-n">7</span>일 기대 수량</b> = 직전 기간 일평균 × <span class="ns-n">7</span>. 2개 이상(빨간색)인데 안 팔렸다면 결품·진열 이탈 가능성이 높습니다.</p></div><button class="btn sm" id="ns-x-d">CSV 내보내기</button></div>
+  <div class="tbl-tools"><input type="search" id="ns-s-d" placeholder="점포·상품명 검색"><div class="seg" id="ns-str"><button data-v="0" class="on">전체</button><button data-v="1">평소 <span class="ns-n">7</span>일에 2개 이상 팔리던 품목만</button></div><span id="ns-sel"></span></div>
+  <div class="tbl-wrap" id="ns-t-d"></div>
+</div>
+</section>
+<!-- ================= /시트: 미매출현황 ================= -->
+
+<!-- ================= 시트: 행사현황 ================= -->
+<section class="sheet" id="sh-pr">
+<div class="filters">
+  <label>점포유형<select id="pr-type"></select></label>
+  <label>중분류<select id="pr-mid"></select></label>
+  <label>브랜드<select id="pr-brand"></select></label>
+  <div class="active-f" id="pr-note"></div>
+</div>
+
+<section class="kpis" id="pr-kpis"></section>
+
+<div class="card">
+  <div class="card-h"><div><h3>주차별 원가 변동</h3><p class="desc" id="pr-mx-desc"></p></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div class="seg" id="pr-view"><button data-v="p" class="on">품목 × 주차</button><button data-v="s">점포 × 주차</button></div>
+      <label class="fld" id="pr-vprod-l" style="display:none">품목<select id="pr-vprod"></select></label>
+      <div class="seg" id="pr-only"><button data-v="1" class="on">원가 변동 있는 행만</button><button data-v="0">전체</button></div>
+      <button class="btn sm" id="pr-x-mx">CSV 내보내기</button>
+    </div></div>
+  <div class="tbl-wrap" id="pr-mx" style="max-height:620px"></div>
+</div>
+
+<div class="grid g2" style="margin-top:12px">
+  <div class="card"><div class="card-h"><div><h3>품목별 행사 기간 판매량 증감</h3><p class="desc">행사 일평균 판매량 ÷ 평시 일평균 판매량 − 1. 행 클릭 시 아래 점포×품목 상세가 그 품목으로 좁혀집니다.</p></div><button class="btn sm" id="pr-x-p">CSV</button></div>
+    <div class="tbl-wrap" id="pr-t-p" style="max-height:460px"></div></div>
+  <div class="card"><div class="card-h"><div><h3>점포별 행사 기간 판매량 증감</h3><p class="desc">점포의 행사 품목 합산 (행사 일평균 합 ÷ 평시 일평균 합 − 1). 행 클릭 시 아래 상세가 그 점포로 좁혀집니다.</p></div><button class="btn sm" id="pr-x-s">CSV</button></div>
+    <div class="tbl-tools"><input type="search" id="pr-s-s" placeholder="점포명 검색"></div>
+    <div class="tbl-wrap" id="pr-t-s" style="max-height:420px"></div></div>
+</div>
+
+<div class="card" style="margin-top:12px">
+  <div class="card-h"><div><h3>점포 × 품목 행사 기간 판매량 증감</h3><p class="desc">행사 기간은 품목 기준(전 점포 원가로 판정). '점포 행사원가'는 그 점포에서 행사 기간에 실제 잡힌 평균 원가로, 정상원가와 같으면 그 점포는 행사 원가가 적용되지 않은 것입니다.</p></div><button class="btn sm" id="pr-x-d">CSV 내보내기</button></div>
+  <div class="tbl-tools"><input type="search" id="pr-s-d" placeholder="점포·상품명 검색"><span id="pr-sel"></span></div>
+  <div class="tbl-wrap" id="pr-t-d"></div>
+</div>
+</section>
+<!-- ================= /시트: 행사현황 ================= -->
+
+
+
+<footer>도입 점포수는 POS 판매실적 기준입니다(취급하지만 해당 기간 판매가 없는 점포는 포함되지 않음). 판매금액·수량은 반품(음수) 반영 순매출입니다. 의무휴업일은 둘째·넷째 일요일 기준 추정이며 지역별로 다릅니다.</footer>
+</div>
+<div id="tt"></div>
+
+
+<script>
+/* ===== 데이터 로더 =====
+   1) data/manifest.js 로 불러올 월 목록 확인  2) master.js 와 월별 파일(data/YYYY-MM.js)을 병렬로 읽음  3) assets/app.js 실행
+   .js(JSONP 방식)라서 GitHub Pages 와 PC에서 index.html 더블클릭(file://) 둘 다 동작합니다. */
+(function(){
+  var E=window.__EMART={manifest:null,master:null,months:{}};
+  window.EMART_MANIFEST=function(m){E.manifest=m};
+  window.EMART_MASTER=function(m){E.master=m};
+  window.EMART_MONTH=function(m){E.months[m.month]=m};
+  var boot=document.getElementById('boot');
+  function load(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(src)};document.head.appendChild(s)})}
+  load('data/manifest.js?t='+Date.now()).then(function(){
+    var v=encodeURIComponent(E.manifest.updated||Date.now());
+    return Promise.all([load('data/master.js?v='+v)].concat(E.manifest.months.map(function(k){return load('data/'+k+'.js?v='+v)}))).then(function(){return load('assets/app.js?v='+v)});
+  }).then(function(){boot.remove()}).catch(function(src){
+    boot.className='boot err';boot.innerHTML='데이터 파일을 불러오지 못했습니다: <b>'+src+'</b><br>data 폴더의 파일 이름과 manifest.js 의 months 목록이 맞는지 확인해 주세요.';
+  });
+})();
+</script>
+</body>
+</html>
