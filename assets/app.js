@@ -28,7 +28,7 @@ const STORES=D.stores.map(([code,name,type],i)=>({i,code,name,type,online:type==
 const PRODS=D.prods.map(([code,name,mid,sub,brand],i)=>({i,code,name,mid,sub,brand,grp:mid==='원두커피'?'원두커피':mid==='인스턴트커피'?'인스턴트커피':'차류'}));
 const F={type:'all',store:'all',mid:'all',sub:'all',brand:'all',prod:'all'};
 let METRIC='a', TAB='ov', DPROD=null, DSTORE=null, MXDIM='s';
-const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let CSSC={};const css=n=>CSSC[n]??=getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 /* ---------- 기간 ---------- */
 // 월별: C=선택월, B=전월(비교)   누적: C=첫 달~선택월, B 없음
@@ -164,19 +164,25 @@ function scatter(el,{pts,xl,yl,refX,refY,groups,tipF,labelIf}){
 
 /* ---------- table ---------- */
 // col: {k,l,f,g,v(row),h(row),nm,tl,nf(합계행 비움)}
+const KO=new Intl.Collator('ko');
+const TPAGE=200;
 function table(el,opt){const{cols,data,key,sort,dir=-1,onClick,sel,foot,first}=opt;
   if(!el._st||!cols.some(c=>c.k===el._st.sort))el._st={sort,dir};const st=el._st;const c=cols.find(c=>c.k===st.sort)||cols[0];
   const val=(r,c)=>c.v?c.v(r):r[c.k];
-  const rows=[...data].sort((a,b)=>{let x=val(a,c),y=val(b,c);if(typeof x==='string'||typeof y==='string')return st.dir*String(x??'').localeCompare(String(y??''),'ko');x=x==null||isNaN(x)?-Infinity:x;y=y==null||isNaN(y)?-Infinity:y;if(x===Infinity)x=1e15;if(y===Infinity)y=1e15;return st.dir*(x-y)});
+  const rows=[...data].sort((a,b)=>{let x=val(a,c),y=val(b,c);if(typeof x==='string'||typeof y==='string')return st.dir*KO.compare(String(x??''),String(y??''));x=x==null||isNaN(x)?-Infinity:x;y=y==null||isNaN(y)?-Infinity:y;if(x===Infinity)x=1e15;if(y===Infinity)y=1e15;return st.dir*(x-y)});
   const fmt=(r,c)=>{const v=val(r,c);switch(c.f){case'int':return fInt(v);case'mom':return momH(v);case'pct':return v==null||isNaN(v)?'-':(v*100).toFixed(1)+'%';case'd':return v==null?'-':dH(v);case'html':return c.h(r);default:return esc(v??'')}};
   const tl=c=>c.f==='text'||c.tl?'tl':'';
   let h=`<table class="t"><thead>`;if(cols.some(c=>c.g)){h+='<tr>';let i=0;while(i<cols.length){const g=cols[i].g||'';let n=1;while(i+n<cols.length&&(cols[i+n].g||'')===g&&g)n++;h+=`<th class="grp ${i===0&&first?'first':''}" colspan="${n}">${g}</th>`;i+=n}h+='</tr>'}
   h+='<tr>'+cols.map((c,i)=>`<th data-k="${c.k}" class="${tl(c)} ${i===0&&first?'first':''}">${c.l}${st.sort===c.k?`<span class="ar">${st.dir<0?'▼':'▲'}</span>`:''}</th>`).join('')+'</tr></thead><tbody>';
-  for(const r of rows)h+=`<tr class="${onClick?'click':''} ${sel!=null&&r[key]===sel?'sel':''}" data-id="${r[key]}">`+cols.map((c,i)=>`<td class="${tl(c)} ${c.nm?'nm':''} ${i===0&&first?'first':''}" ${c.nm?`title="${esc(val(r,c))}"`:''}>${fmt(r,c)}</td>`).join('')+'</tr>';
+  if(el._sig!==data){el._sig=data;el._lim=TPAGE}if(sel!=null){const si=rows.findIndex(r=>r[key]===sel);if(si>=el._lim)el._lim=si+1}
+  const shown=rows.length>el._lim?rows.slice(0,el._lim):rows;
+  for(const r of shown)h+=`<tr class="${onClick?'click':''} ${sel!=null&&r[key]===sel?'sel':''}" data-id="${r[key]}">`+cols.map((c,i)=>`<td class="${tl(c)} ${c.nm?'nm':''} ${i===0&&first?'first':''}" ${c.nm?`title="${esc(val(r,c))}"`:''}>${fmt(r,c)}</td>`).join('')+'</tr>';
+  if(shown.length<rows.length)h+=`<tr class="more"><td colspan="${cols.length}"><button type="button" data-more="1">${fInt(shown.length)} / ${fInt(rows.length)}행 표시 · ${fInt(Math.min(TPAGE*5,rows.length-shown.length))}행 더 보기</button> <button type="button" data-more="all">전체 보기</button></td></tr>`;
   h+='</tbody>';if(foot)h+=`<tfoot><tr>${cols.map((c,i)=>`<td class="${tl(c)} ${i===0&&first?'first':''}">${i===0?esc(foot.label):(c.nf||c.f==='text'||(c.f==='html'&&!c.ff))?'':fmt(foot,c)}</td>`).join('')}</tr></tfoot>`;
   el.innerHTML=h+'</table>';el._rows=rows;el._cols=cols;
   el.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(st.sort===k)st.dir*=-1;else{st.sort=k;st.dir=cols.find(c=>c.k===k).f==='text'?1:-1}table(el,opt)});
-  if(onClick)el.querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>onClick(tr.dataset.id));
+  el.querySelectorAll('button[data-more]').forEach(b=>b.onclick=e=>{e.stopPropagation();el._lim=b.dataset.more==='all'?Infinity:el._lim+TPAGE*5;table(el,opt)});
+  if(onClick)el.querySelectorAll('tbody tr:not(.more)').forEach(tr=>tr.onclick=()=>onClick(tr.dataset.id));
 }
 function csvDL(name,head,lines){const q=s=>{s=String(s??'');return/[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};const txt='﻿'+[head.map(q).join(','),...lines.map(l=>l.map(q).join(','))].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));a.download=name+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function csv(el,name,suf){const cols=el._cols,rows=el._rows;if(!cols)return;const v=(r,c)=>{const x=c.v?c.v(r):r[c.k];if(c.f==='mom'||c.f==='pct'){if(x==null||isNaN(x))return'';if(x===Infinity)return'신규';return(x*100).toFixed(1)+'%'}if(c.csv)return c.csv(r);return x??''};
@@ -392,15 +398,17 @@ function renderDY(A){const T=A.T;const RQ=new Float64Array(ND),RF=new Uint8Array
       foot:{label:'합계',q:T.qC,a:T.aC}});
   }
   renderMX()}
+let MXLIM=40;
 function renderMX(){const rows=rowsFor();const s0=CURR.s,e=CURR.e+1,n=e-s0;const by=new Map();
   for(const r of rows){const k=MXDIM==='s'?r.s:r.p;let o=by.get(k);if(!o){o={id:k,v:new Float64Array(n),t:0,rq:new Float64Array(n),rf:new Uint8Array(n)};by.set(k,o)}const arr=METRIC==='a'?r.a:r.q;for(let i=0;i<n;i++){const g=s0+i;o.v[i]+=arr[g];o.t+=arr[g];if(r.q[g]<0||r.a[g]<0){o.rf[i]=1;o.rq[i]+=r.q[g]<0?-r.q[g]:0}}}
   const list=[...by.values()].filter(o=>o.t!==0).sort((a,b)=>b.t-a.t);let mx=0;list.forEach(o=>o.v.forEach(v=>{if(v>mx)mx=v}));
   const heat=css('--heat');let nRet=0;const cell=(v,i,o)=>{const rf=o.rf[i];if(rf)nRet++;const rb=rf?`<span class="rbadge">반품${o.rq[i]?' '+fInt(o.rq[i]):''}</span>`:'',rt=rf?` title="반품(음수) 발생 · 반품 수량 ${fInt(o.rq[i])}개"`:'';if(!v)return`<td class="${rf?'ret':''}" style="color:var(--muted)"${rt}>${rf?'0':'·'}${rb}</td>`;const a=Math.max(.06,Math.min(1,v/mx));return`<td class="${rf?'ret':''}" style="background:rgba(${heat},${(Math.max(0,a)*.85).toFixed(2)});${a>.55?'color:#fff':''}"${rt}>${METRIC==='a'?fInt(v/1000):fInt(v)}${rb}</td>`};
   let h=`<table class="t heat"><thead><tr><th class="tl first">${MXDIM==='s'?'점포':'상품'}</th><th>합계</th>`;for(let i=0;i<n;i++){const D_=DAYS[s0+i];h+=`<th class="${D_.red?'we':''}" title="${D_.note}">${D_.d===1&&C.length>1?D_.m+'/':''}${D_.d}<br>${DOW[D_.dow]}</th>`}h+='</tr></thead><tbody>';
-  for(const o of list){const nm=MXDIM==='s'?STORES[o.id].name:PRODS[o.id].name;h+=`<tr><td class="tl first nm" title="${esc(nm)}">${esc(nm)}</td><td><b>${METRIC==='a'?fInt(o.t/1000):fInt(o.t)}</b></td>${Array.from(o.v).map((v,i)=>cell(v,i,o)).join('')}</tr>`}
-  h+='</tbody></table>';$('t-mx').innerHTML=list.length?h:'<div class="empty">데이터 없음</div>';$('t-mx')._mx={list,n,s0};
+  const shown=list.slice(0,MXLIM);for(const o of shown){const nm=MXDIM==='s'?STORES[o.id].name:PRODS[o.id].name;h+=`<tr><td class="tl first nm" title="${esc(nm)}">${esc(nm)}</td><td><b>${METRIC==='a'?fInt(o.t/1000):fInt(o.t)}</b></td>${Array.from(o.v).map((v,i)=>cell(v,i,o)).join('')}</tr>`}
+  if(shown.length<list.length)h+=`<tr class="more"><td colspan="${n+2}" style="text-align:left"><button type="button" data-mx="all">상위 ${shown.length}개 표시 · 나머지 ${fInt(list.length-shown.length)}개 모두 보기</button></td></tr>`;
+  h+='</tbody></table>';$('t-mx').innerHTML=list.length?h:'<div class="empty">데이터 없음</div>';$('t-mx')._mx={list,n,s0};const mb=$('t-mx').querySelector('[data-mx]');if(mb)mb.onclick=()=>{MXLIM=Infinity;renderMX()};
   $('mx-desc').innerHTML=`${perLabel()} · 행: 점포 또는 상품 · 열: 일자 (빨간 요일 = 주말·공휴일·의무휴업 추정일). ${METRIC==='a'?'<b>단위: 천원</b>':'<b>단위: 개</b>'} · 진할수록 값이 큽니다. <span class="rbadge">반품</span> 붉은 테두리 = 그날 반품(음수 매출) 발생 (${fInt(nRet)}칸)`}
-$('mx-dim').querySelectorAll('button').forEach(b=>b.onclick=()=>{MXDIM=b.dataset.v;$('mx-dim').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));renderMX()});
+$('mx-dim').querySelectorAll('button').forEach(b=>b.onclick=()=>{MXDIM=b.dataset.v;MXLIM=40;$('mx-dim').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));renderMX()});
 $('x-mx').onclick=()=>{const m=$('t-mx')._mx;if(!m)return;csvDL(`이마트_${perLabel().replace(/\s/g,'')}_${MXDIM==='s'?'점포':'상품'}x일자_${METRIC==='a'?'금액':'수량'}`,[MXDIM==='s'?'점포':'상품','합계',...Array.from({length:m.n},(_,i)=>`${DAYS[m.s0+i].m}/${DAYS[m.s0+i].d}`)],m.list.map(o=>[MXDIM==='s'?STORES[o.id].name:PRODS[o.id].name,o.t,...o.v]))};
 
 /* ---------- coverage ---------- */
@@ -440,7 +448,7 @@ function renderTab(){untip();const A=CUR;if(!$('sh-sales').classList.contains('o
 $('s-prod').addEventListener('input',()=>renderPR(CUR));$('s-store').addEventListener('input',()=>renderST(CUR));
 $('x-prod').onclick=()=>csv($('t-prod'),'이마트_상품별');$('x-store').onclick=()=>csv($('t-store'),'이마트_점포별');$('x-day').onclick=()=>csv($('t-day'),'이마트_일자별');$('x-cv').onclick=()=>csv($('t-cv'),'이마트_도입점포현황');
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>renderSheet(),150)});
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change',renderTab);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{CSSC={};renderTab()});
 
 /* ================= 시트: 미매출현황 ================= */
 let NS_DAYS=7;

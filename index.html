@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>이마트 POS 대시보드</title>
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/style.css?c=2">
 </head>
 <body>
 <div id="boot" class="boot">데이터를 불러오는 중…</div>
@@ -313,7 +313,7 @@
   function load(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(src)};document.head.appendChild(s)})}
   load('data/manifest.js?t='+Date.now()).then(function(){
     var v=encodeURIComponent(E.manifest.updated||Date.now());
-    return Promise.all([load('data/master.js?v='+v)].concat(E.manifest.months.map(function(k){return load('data/'+k+'.js?v='+v)}))).then(function(){return load('assets/app.js?v='+v)});
+    return Promise.all([load('data/master.js?v='+v)].concat(E.manifest.months.map(function(k){return load('data/'+k+'.js?v='+v)}))).then(function(){return load('assets/app.js?v='+v+'&c=2')});
   }).then(function(){boot.remove()}).catch(function(src){
     boot.className='boot err';boot.innerHTML='데이터 파일을 불러오지 못했습니다: <b>'+src+'</b><br>data 폴더의 파일 이름과 manifest.js 의 months 목록이 맞는지 확인해 주세요.';
   });

@@ -172,3 +172,7 @@ table.heat td.ret .rbadge{display:block;margin:1px auto 0;width:max-content}
 #ns-rec{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
 .boot{position:fixed;inset:auto 0 0 0;top:0;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text-2);font-size:15px;z-index:100;text-align:center;line-height:1.7;padding:20px}
 .boot.err{color:var(--up)}
+table.t tbody tr.more td{text-align:center;padding:10px;background:var(--surface-2)}
+table.t tbody tr.more:hover td{background:var(--surface-2)}
+table.t tr.more button{font:inherit;font-size:12px;padding:5px 12px;border:1px solid var(--border-2);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;margin:0 3px}
+table.t tr.more button:hover{border-color:var(--accent);color:var(--accent)}
