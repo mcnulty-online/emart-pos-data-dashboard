@@ -166,7 +166,7 @@ function scatter(el,{pts,xl,yl,refX,refY,groups,tipF,labelIf}){
 // col: {k,l,f,g,v(row),h(row),nm,tl,nf(합계행 비움)}
 const KO=new Intl.Collator('ko');
 const TPAGE=200;
-function table(el,opt){const{cols,data,key,sort,dir=-1,onClick,sel,foot,first,limit=TPAGE}=opt;
+function table(el,opt){const{cols,data,key,sort,dir=-1,onClick,sel,foot,first}=opt;
   if(!el._st||!cols.some(c=>c.k===el._st.sort))el._st={sort,dir};const st=el._st;const c=cols.find(c=>c.k===st.sort)||cols[0];
   const val=(r,c)=>c.v?c.v(r):r[c.k];
   const rows=[...data].sort((a,b)=>{let x=val(a,c),y=val(b,c);if(typeof x==='string'||typeof y==='string')return st.dir*KO.compare(String(x??''),String(y??''));x=x==null||isNaN(x)?-Infinity:x;y=y==null||isNaN(y)?-Infinity:y;if(x===Infinity)x=1e15;if(y===Infinity)y=1e15;return st.dir*(x-y)});
@@ -174,7 +174,7 @@ function table(el,opt){const{cols,data,key,sort,dir=-1,onClick,sel,foot,first,li
   const tl=c=>c.f==='text'||c.tl?'tl':'';
   let h=`<table class="t"><thead>`;if(cols.some(c=>c.g)){h+='<tr>';let i=0;while(i<cols.length){const g=cols[i].g||'';let n=1;while(i+n<cols.length&&(cols[i+n].g||'')===g&&g)n++;h+=`<th class="grp ${i===0&&first?'first':''}" colspan="${n}">${g}</th>`;i+=n}h+='</tr>'}
   h+='<tr>'+cols.map((c,i)=>`<th data-k="${c.k}" class="${tl(c)} ${i===0&&first?'first':''}">${c.l}${st.sort===c.k?`<span class="ar">${st.dir<0?'▼':'▲'}</span>`:''}</th>`).join('')+'</tr></thead><tbody>';
-  if(el._sig!==data){el._sig=data;el._lim=limit}if(sel!=null){const si=rows.findIndex(r=>r[key]===sel);if(si>=el._lim)el._lim=si+1}
+  if(el._sig!==data){el._sig=data;el._lim=TPAGE}if(sel!=null){const si=rows.findIndex(r=>r[key]===sel);if(si>=el._lim)el._lim=si+1}
   const shown=rows.length>el._lim?rows.slice(0,el._lim):rows;
   for(const r of shown)h+=`<tr class="${onClick?'click':''} ${sel!=null&&r[key]===sel?'sel':''}" data-id="${r[key]}">`+cols.map((c,i)=>`<td class="${tl(c)} ${c.nm?'nm':''} ${i===0&&first?'first':''}" ${c.nm?`title="${esc(val(r,c))}"`:''}>${fmt(r,c)}</td>`).join('')+'</tr>';
   if(shown.length<rows.length)h+=`<tr class="more"><td colspan="${cols.length}"><button type="button" data-more="1">${fInt(shown.length)} / ${fInt(rows.length)}행 표시 · ${fInt(Math.min(TPAGE*5,rows.length-shown.length))}행 더 보기</button> <button type="button" data-more="all">전체 보기</button></td></tr>`;
@@ -463,29 +463,21 @@ function nsBuildFilters(){
 
 ['type','mid','brand'].forEach(k=>$('ns-'+k).addEventListener('change',e=>{NSF[k]=e.target.value;NSF.store=null;NSF.prod=null;renderNS()}));
 
-// 기준 = 점포 범위 안의 전체 점포(예: 135점) × 기간 내 한 번이라도 팔린 전체 품목.
-// 최근 N일 연속 판매 0 → 미매출 (데이터 기간 내 한 번도 안 팔린 점포·품목 포함)
 function nsCompute(){
-  const US=STORES.filter(s=>SOK[s.i]&&(NSF.type==='all'||s.type===NSF.type));
-  const pOK=p=>(NSF.mid==='all'||p.mid===NSF.mid)&&(NSF.brand==='all'||p.brand===NSF.brand);
-  const inS=new Uint8Array(STORES.length);US.forEach(s=>inS[s.i]=1);
-  const RM=new Map(),soldP=new Set();
-  for(const r of ROWS){if(!inS[r.s]||!pOK(PRODS[r.p]))continue;RM.set(r.s*100000+r.p,r);for(let i=0;i<=NS_WE;i++)if(r.q[i]>0){soldP.add(r.p);break}}
-  const UP=PRODS.filter(p=>soldP.has(p.i));const nDays=NS_PE-NS_PS+1;
-  const mk=(id,info)=>Object.assign({id,un:0,cut:0,nev:0,sold:0,stallA:0,dq:new Float64Array(NS_WE+1)},info);
-  const S=new Map(US.map(s=>[s.i,mk(s.i,{name:s.name,type:s.type})])),P=new Map(UP.map(p=>[p.i,mk(p.i,{name:p.name,sub:p.sub,brand:p.brand})]));
-  const pairs=[],SUBV={};let hist=0;
-  for(const st of US)for(const pr of UP){const r=RM.get(st.i*100000+pr.i),so=S.get(st.i),po=P.get(pr.i);
-    let last=-1,inWin=false,h=false,preQ=0,preA=0;
-    if(r){for(let i=0;i<=NS_WE;i++){const q=r.q[i];so.dq[i]+=q;po.dq[i]+=q;if(q>0){last=i;if(i>=NS_WS)inWin=true;else h=true}}for(let i=NS_PS;i<=NS_PE;i++){preQ+=r.q[i];preA+=r.a[i]}}
-    if(h){hist++;(SUBV[pr.sub]||(SUBV[pr.sub]=[])).push(preQ/nDays)}
-    if(inWin){so.sold++;po.sold++;continue}
-    so.un++;po.un++;so.stallA+=preA;po.stallA+=preA;
-    pairs.push({id:pairs.length,s:st.i,p:pr.i,store:st.name,type:st.type,prod:pr.name,sub:pr.sub,last,streak:last>=0?NS_WE-last:null,preQ,preA,avg:preQ/nDays})}
+  const rows=ROWS.filter(r=>{const s=STORES[r.s],p=PRODS[r.p];return SOK[r.s]&&(NSF.type==='all'||s.type===NSF.type)&&(NSF.mid==='all'||p.mid===NSF.mid)&&(NSF.brand==='all'||p.brand===NSF.brand)});
+  const S=new Map(),P=new Map(),pairs=[],SUBV={};let hist=0;
+  const get=(m,k)=>{let o=m.get(k);if(!o){o={id:k,hist:0,stall:0,stallA:0,stallQ:0,preA:0,preQ:0,dq:new Float64Array(NS_WE+1)};m.set(k,o)}return o};
+  for(const r of rows){const s=get(S,r.s),p=get(P,r.p);for(let i=0;i<=NS_WE;i++){s.dq[i]+=r.q[i];p.dq[i]+=r.q[i]}
+    let preQ=0,preA=0;for(let i=NS_PS;i<=NS_PE;i++){preQ+=r.q[i];preA+=r.a[i]}s.preA+=preA;s.preQ+=preQ;p.preA+=preA;p.preQ+=preQ;
+    let last=-1;for(let i=NS_WE;i>=0;i--)if(r.q[i]>0){last=i;break}
+    let h=false;for(let i=0;i<NS_WS;i++)if(r.q[i]>0){h=true;break}
+    if(h){hist++;s.hist++;p.hist++;const sb=PRODS[r.p].sub;(SUBV[sb]||(SUBV[sb]=[])).push(preQ/(NS_PE-NS_PS+1))}
+    if(last>=0&&last<NS_WS){s.stall++;p.stall++;s.stallA+=preA;p.stallA+=preA;s.stallQ+=preQ;p.stallQ+=preQ;
+      const St=STORES[r.s],Pr=PRODS[r.p];pairs.push({id:pairs.length,s:r.s,p:r.p,store:St.name,type:St.type,prod:Pr.name,sub:Pr.sub,last,streak:NS_WE-last,preQ,preA,avg:preQ/(NS_PE-NS_PS+1)})}}
   const lastOf=o=>{for(let i=NS_WE;i>=0;i--)if(o.dq[i]>0)return i;return-1};
-  const fin=m=>[...m.values()].map(o=>{const l=lastOf(o);return Object.assign(o,{last:l,dead:l<NS_WS,never:l<0,streak:l>=0?NS_WE-l:null})});
-  const ss=fin(S),ps=fin(P);
-  return{ss,ps,pairs,hist,SUBV,NS_:US.length,NP_:UP.length}}
+  const fin=(m,info)=>[...m.values()].map(o=>{const l=lastOf(o);return Object.assign(o,info(o.id),{last:l,dead:l>=0&&l<NS_WS,streak:l>=0?NS_WE-l:null})});
+  const ss=fin(S,i=>({name:STORES[i].name,type:STORES[i].type})),ps=fin(P,i=>({name:PRODS[i].name,sub:PRODS[i].sub,brand:PRODS[i].brand}));
+  return{ss,ps,pairs,hist,SUBV,nSt:ss.filter(o=>o.last>=0).length,nPr:ps.filter(o=>o.last>=0).length}}
 
 function nsRec(R){const opt=[3,5,7,14];const rows=Object.entries(R.SUBV).map(([sb,a])=>{a.sort((x,y)=>x-y);const med=a[Math.floor(a.length/2)]||0;const need=med>0?2/med:Infinity;const rec=opt.find(d=>d>=need);return{sb,med,rec,n:a.length}}).sort((a,b)=>b.med-a.med);
   $('ns-rec').innerHTML='<span class="note">회전 속도별 권장 기준 (점포당 일평균 판매량 중앙값 → 평소 2개 팔리는 데 걸리는 일수):</span> '+rows.map(o=>`<span class="chip" style="${o.rec===NS_DAYS?'border-color:var(--accent);color:var(--accent)':''}"><b>${esc(o.sb)}</b> ${o.med.toFixed(2)}개/일 → ${o.rec?o.rec+'일':'14일 이상'}</span>`).join('')}
@@ -494,29 +486,24 @@ function nsWinText(){
   const nts=[];for(let g=NS_WS;g<=NS_WE;g++)if(DAYS[g].note)nts.push(`${DAYS[g].m}/${DAYS[g].d} ${DAYS[g].note}`);
   $('ns-win').innerHTML=`미매출 기간: <b>${dLab(NS_WS)} ~ ${dLab(NS_WE)}</b> (선택 기간 마지막 날 기준 ${NS_DAYS}일) · 비교 실적: 직전 ${NS_PE-NS_PS+1}일 ${dLab(NS_PS)} ~ ${dLab(NS_PE)}${nts.length?`<br><span class="down">※ 이 기간에 ${nts.join(', ')}이 포함되어 있어 평소보다 미매출이 많게 나올 수 있습니다.</span>`:''}`}
 function renderNS(){document.querySelectorAll('.ns-n').forEach(e=>e.textContent=NS_DAYS);nsWin();if(NS_WS<1){$('ns-win').innerHTML='';['ns-kpis','ns-dead-s','ns-dead-p','ns-t-s','ns-t-p','ns-t-d'].forEach(id=>$(id).innerHTML='');$('ns-kpis').innerHTML=`<div class="empty" style="grid-column:1/-1">선택 기간 마지막 날(${dLab(NS_WE)}) 이전 데이터가 ${NS_DAYS}일보다 짧아 ${NS_DAYS}일 연속 미매출을 판단할 수 없습니다. 더 뒤의 기간을 선택해 주세요.</div>`;return}nsWinText();const R=nsCompute();nsRec(R);
-  const dS=R.ss.filter(o=>o.dead).sort((a,b)=>(a.never-b.never)||(a.streak-b.streak)),dP=R.ps.filter(o=>o.dead).sort((a,b)=>(a.never-b.never)||(a.streak-b.streak));
+  const dS=R.ss.filter(o=>o.dead).sort((a,b)=>b.preA-a.preA),dP=R.ps.filter(o=>o.dead).sort((a,b)=>b.preA-a.preA);
   const pA=R.pairs.reduce((s,p)=>s+p.preA,0);
   const k=(l,v,c)=>`<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="c">${c}</div></div>`;
   $('ns-kpis').innerHTML=
-    k(`${NS_DAYS}일 연속 전 품목 미매출 점포`,`${dS.length}점`,`전체 ${R.NS_}점 중 · 맥널티 상품 0건`)+
-    k(`${NS_DAYS}일 연속 전 점포 미매출 품목`,`${dP.length}개`,`전체 ${R.NP_}개 품목 중 · ${R.NS_}점 어디서도 0건`)+
-    k(`점포×품목 ${NS_DAYS}일 연속 미매출`,`${fInt(R.pairs.length)}건`,`전체 ${fInt(R.NS_*R.NP_)}건(${R.NS_}점×${R.NP_}품목) 중 ${pctTxt(R.pairs.length/(R.NS_*R.NP_||1))}`)+
+    k(`${NS_DAYS}일+ 전 품목 미매출 점포`,`${dS.length}점`,`판매 점포 ${R.nSt}점 중 · 맥널티 상품 0건`)+
+    k(`${NS_DAYS}일+ 전 점포 미매출 품목`,`${dP.length}개`,`판매 품목 ${R.nPr}개 중 · 어느 점포에서도 0건`)+
+    k('점포×품목 미매출',`${fInt(R.pairs.length)}건`,`판매 이력 ${fInt(R.hist)}건 중 ${R.hist?(R.pairs.length/R.hist*100).toFixed(1):0}%`)+
     k('미매출 건의 직전 30일 매출',`${fMan(pA)}원`,'평소 팔리던 규모 (놓치고 있는 매출 참고)');
-  document.querySelectorAll('.ns-nst').forEach(e=>e.textContent=R.NS_);document.querySelectorAll('.ns-npr').forEach(e=>e.textContent=R.NP_);
-  const chip=(o,kind)=>`<span class="chip ns-chip" data-k="${kind}" data-i="${o.id}" style="cursor:pointer"><b>${esc(o.name)}</b> ${o.never?`${NS_WE+1}일+`:o.streak+'일째'}</span>`;
+  const chip=(o,kind)=>`<span class="chip ns-chip" data-k="${kind}" data-i="${o.id}" style="cursor:pointer"><b>${esc(o.name)}</b> ${o.streak}일째 · 직전30일 ${fMan(o.preA)}</span>`;
   $('ns-dead-s').innerHTML=dS.length?`<div class="chips">${dS.map(o=>chip(o,'s')).join('')}</div>`:'<div class="empty">해당 점포 없음</div>';
   $('ns-dead-p').innerHTML=dP.length?`<div class="chips">${dP.map(o=>chip(o,'p')).join('')}</div>`:'<div class="empty">해당 품목 없음</div>';
   document.querySelectorAll('.ns-chip').forEach(c=>c.onclick=()=>{if(c.dataset.k==='s'){NSF.store=+c.dataset.i;NSF.prod=null}else{NSF.prod=+c.dataset.i;NSF.store=null}nsDetail(R);$('ns-t-d').scrollIntoView({behavior:'smooth',block:'center'})});
-  const dead=r=>r.dead?` <span class="pill" style="color:var(--up)">전체 미매출</span>`:'';
+  const dead=r=>r.dead?' <span class="pill" style="color:var(--down)">전체 미매출</span>':'';
   const qs=$('ns-s-s').value.trim(),qp=$('ns-s-p').value.trim();
-  table($('ns-t-s'),{key:'id',sort:'un',first:1,sel:NSF.store,data:R.ss.filter(o=>o.un>0&&(!qs||o.name.includes(qs))),onClick:id=>{NSF.store=+id;NSF.prod=null;renderNS()},
-    cols:[{k:'name',l:'점포',f:'html',tl:1,h:r=>esc(r.name)+dead(r),v:r=>r.name,csv:r=>r.name},{k:'type',l:'유형',f:'text'},tierCol(),
-      {k:'un',l:`${NS_DAYS}일 연속 미매출 품목 (/${R.NP_})`,f:'int'},
-      {k:'sold',l:`최근 ${NS_DAYS}일 판매 품목`,f:'int'},{k:'rt',l:'미매출 비중',f:'pct',v:r=>r.un/(R.NP_||1)},{k:'stallA',l:'미매출 품목 직전30일 매출',f:'int'},{k:'lastd',l:'점포 마지막 판매일',f:'html',tl:1,h:lastTxt,v:r=>r.last,csv:lastTxt}]});
-  table($('ns-t-p'),{key:'id',sort:'un',first:1,sel:NSF.prod,data:R.ps.filter(o=>o.un>0&&(!qp||o.name.includes(qp))),onClick:id=>{NSF.prod=+id;NSF.store=null;renderNS()},
-    cols:[{k:'name',l:'상품명',f:'html',tl:1,nm:1,h:r=>esc(r.name)+dead(r),v:r=>r.name,csv:r=>r.name},{k:'sub',l:'소분류',f:'text'},
-      {k:'un',l:`${NS_DAYS}일 연속 미매출 점포 (/${R.NS_})`,f:'int'},
-      {k:'sold',l:`최근 ${NS_DAYS}일 판매 점포`,f:'int'},{k:'rt',l:'미매출 비중',f:'pct',v:r=>r.un/(R.NS_||1)},{k:'stallA',l:'미매출 점포 직전30일 매출',f:'int'},{k:'lastd',l:'품목 마지막 판매일',f:'html',tl:1,h:lastTxt,v:r=>r.last,csv:lastTxt}]});
+  table($('ns-t-s'),{key:'id',sort:'stall',first:1,sel:NSF.store,data:R.ss.filter(o=>o.stall>0&&(!qs||o.name.includes(qs))),onClick:id=>{NSF.store=+id;NSF.prod=null;renderNS()},
+    cols:[{k:'name',l:'점포',f:'html',tl:1,h:r=>esc(r.name)+dead(r),v:r=>r.name,csv:r=>r.name},{k:'type',l:'유형',f:'text'},tierCol(),{k:'stall',l:'미매출 품목',f:'int'},{k:'hist',l:'판매 이력 품목',f:'int'},{k:'rt',l:'미매출 비중',f:'pct',v:r=>dv(r.stall,r.hist)},{k:'stallA',l:'미매출 품목 직전30일 매출',f:'int'},{k:'lastd',l:'점포 마지막 판매일',f:'html',tl:1,h:lastTxt,v:r=>r.last,csv:lastTxt}]});
+  table($('ns-t-p'),{key:'id',sort:'stall',first:1,sel:NSF.prod,data:R.ps.filter(o=>o.stall>0&&(!qp||o.name.includes(qp))),onClick:id=>{NSF.prod=+id;NSF.store=null;renderNS()},
+    cols:[{k:'name',l:'상품명',f:'html',tl:1,nm:1,h:r=>esc(r.name)+dead(r),v:r=>r.name,csv:r=>r.name},{k:'sub',l:'소분류',f:'text'},{k:'stall',l:'미매출 점포',f:'int'},{k:'hist',l:'판매 이력 점포',f:'int'},{k:'rt',l:'미매출 비중',f:'pct',v:r=>dv(r.stall,r.hist)},{k:'stallA',l:'미매출 점포 직전30일 매출',f:'int'},{k:'lastd',l:'품목 마지막 판매일',f:'html',tl:1,h:lastTxt,v:r=>r.last,csv:lastTxt}]});
   nsDetail(R)}
 function nsDetail(R){const q=$('ns-s-d').value.trim();
   let d=R.pairs.filter(p=>(NSF.store==null||p.s===NSF.store)&&(NSF.prod==null||p.p===NSF.prod)&&(!q||p.store.includes(q)||p.prod.includes(q))&&(!NSF.strong||p.avg*NS_DAYS>=2));
@@ -524,7 +511,7 @@ function nsDetail(R){const q=$('ns-s-d').value.trim();
   $('ns-sel').innerHTML=sel?`<span class="chip">선택: <b>${esc(sel)}</b></span> <button class="btn sm" id="ns-clr">전체 보기</button>`:`<span class="note">${fInt(d.length)}건</span>`;
   if(sel)$('ns-clr').onclick=()=>{NSF.store=null;NSF.prod=null;renderNS()};
   table($('ns-t-d'),{key:'id',sort:'preA',first:1,data:d,cols:[{k:'store',l:'점포',f:'text'},{k:'type',l:'유형',f:'text'},{k:'prod',l:'상품명',f:'text',nm:1},{k:'sub',l:'소분류',f:'text'},
-    {k:'streak',l:'연속 미매출',f:'html',h:r=>r.streak==null?`<b class="up">${NS_WE+1}일+</b>`:`<b class="${r.streak>=14?'up':''}">${r.streak}일</b>`,v:r=>r.streak??9999,csv:r=>r.streak??`${NS_WE+1}+`},{k:'lastd',l:'마지막 판매일',f:'html',tl:1,h:lastTxt,v:r=>r.last,csv:lastTxt},
+    {k:'streak',l:'연속 미매출',f:'html',h:r=>`<b class="${r.streak>=14?'up':''}">${r.streak}일</b>`,v:r=>r.streak,csv:r=>r.streak},{k:'lastd',l:'마지막 판매일',f:'html',tl:1,h:lastTxt,v:r=>r.last,csv:lastTxt},
     {k:'preQ',l:'수량',f:'int',g:'직전 30일 실적'},{k:'preA',l:'금액',f:'int',g:'직전 30일 실적'},{k:'avg',l:'일평균 수량',f:'html',g:'직전 30일 실적',h:r=>r.avg.toFixed(1),v:r=>r.avg,csv:r=>r.avg.toFixed(2)},{k:'exp',l:`${NS_DAYS}일 기대 수량`,f:'html',g:'직전 30일 실적',h:r=>{const e=r.avg*NS_DAYS;return`<span class="${e>=2?'up':'flat'}">${e.toFixed(1)}개</span>`},v:r=>r.avg*NS_DAYS,csv:r=>(r.avg*NS_DAYS).toFixed(1)}]});
   // 다른 표의 선택 표시 갱신
   $('ns-t-s').querySelectorAll('tbody tr').forEach(tr=>tr.classList.toggle('sel',NSF.store!=null&&+tr.dataset.id===NSF.store));

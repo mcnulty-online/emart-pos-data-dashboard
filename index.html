@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>이마트 POS 대시보드</title>
-<link rel="stylesheet" href="assets/style.css?c=3">
+<link rel="stylesheet" href="assets/style.css?c=2">
 </head>
 <body>
 <div id="boot" class="boot">데이터를 불러오는 중…</div>
@@ -236,19 +236,19 @@
 <section class="kpis" id="ns-kpis"></section>
 
 <div class="grid g2">
-  <div class="card"><h3>전 품목 미매출 점포</h3><p class="desc">전체 <span class="ns-nst">135</span>점 중 최근 <span class="ns-n">7</span>일 연속 맥널티 상품이 하나도 팔리지 않은 점포. 클릭하면 아래 상세가 그 점포로 좁혀집니다.</p><div id="ns-dead-s"></div></div>
-  <div class="card"><h3>전 점포 미매출 품목</h3><p class="desc">전체 <span class="ns-npr">53</span>개 품목 중 최근 <span class="ns-n">7</span>일 연속 <span class="ns-nst">135</span>점 어디에서도 팔리지 않은 품목. 클릭하면 아래 상세가 그 품목으로 좁혀집니다.</p><div id="ns-dead-p"></div></div>
+  <div class="card"><h3>전 품목 미매출 점포</h3><p class="desc">최근 <span class="ns-n">7</span>일 동안 맥널티 상품이 하나도 팔리지 않은 점포 (이전 판매 이력 있음). 클릭하면 아래 상세가 그 점포로 좁혀집니다.</p><div id="ns-dead-s"></div></div>
+  <div class="card"><h3>전 점포 미매출 품목</h3><p class="desc">최근 <span class="ns-n">7</span>일 동안 어느 점포에서도 팔리지 않은 품목 (이전 판매 이력 있음). 클릭하면 아래 상세가 그 품목으로 좁혀집니다.</p><div id="ns-dead-p"></div></div>
 </div>
 
 <div class="grid g2" style="margin-top:12px">
-  <div class="card"><div class="card-h"><div><h3>점포별 미매출 품목</h3><p class="desc">점포마다 전체 <span class="ns-npr">53</span>개 품목 중 최근 <span class="ns-n">7</span>일 연속 판매가 0인 품목 수. 행 클릭 시 아래 상세 필터</p></div><button class="btn sm" id="ns-x-s">CSV</button></div>
+  <div class="card"><div class="card-h"><div><h3>점포별 미매출 품목</h3><p class="desc">판매 이력 품목 = <span class="ns-n">7</span>일 이전에 한 번이라도 팔린 품목. 행 클릭 시 아래 상세 필터</p></div><button class="btn sm" id="ns-x-s">CSV</button></div>
     <div class="tbl-tools"><input type="search" id="ns-s-s" placeholder="점포명 검색"></div><div class="tbl-wrap" id="ns-t-s" style="max-height:420px"></div></div>
-  <div class="card"><div class="card-h"><div><h3>품목별 미매출 점포</h3><p class="desc">품목마다 전체 <span class="ns-nst">135</span>점 중 최근 <span class="ns-n">7</span>일 연속 판매가 0인 점포 수 (미매출 점포 + 최근 <span class="ns-n">7</span>일 판매 점포 = <span class="ns-nst">135</span>점). 행 클릭 시 아래 상세 필터</p></div><button class="btn sm" id="ns-x-p">CSV</button></div>
+  <div class="card"><div class="card-h"><div><h3>품목별 미매출 점포</h3><p class="desc">판매 이력 점포 = <span class="ns-n">7</span>일 이전에 한 번이라도 판매한 점포. 행 클릭 시 아래 상세 필터</p></div><button class="btn sm" id="ns-x-p">CSV</button></div>
     <div class="tbl-tools"><input type="search" id="ns-s-p" placeholder="상품명 검색"></div><div class="tbl-wrap" id="ns-t-p" style="max-height:420px"></div></div>
 </div>
 
 <div class="card" style="margin-top:12px">
-  <div class="card-h"><div><h3>점포 × 품목 미매출 상세</h3><p class="desc">전체 <span class="ns-nst">135</span>점 × <span class="ns-npr">53</span>개 품목 중 최근 <span class="ns-n">7</span>일 연속 판매가 없는 조합. 직전 30일 실적이 큰 순 = 놓치고 있는 매출이 큰 순입니다. <b><span class="ns-n">7</span>일 기대 수량</b> = 직전 기간 일평균 × <span class="ns-n">7</span>. 2개 이상(빨간색)인데 안 팔렸다면 결품·진열 이탈 가능성이 높습니다.</p></div><button class="btn sm" id="ns-x-d">CSV 내보내기</button></div>
+  <div class="card-h"><div><h3>점포 × 품목 미매출 상세</h3><p class="desc">해당 점포에서 팔린 적이 있는데 최근 <span class="ns-n">7</span>일 연속 판매가 없는 품목. 직전 30일 실적이 큰 순 = 놓치고 있는 매출이 큰 순입니다. <b><span class="ns-n">7</span>일 기대 수량</b> = 직전 기간 일평균 × <span class="ns-n">7</span>. 2개 이상(빨간색)인데 안 팔렸다면 결품·진열 이탈 가능성이 높습니다.</p></div><button class="btn sm" id="ns-x-d">CSV 내보내기</button></div>
   <div class="tbl-tools"><input type="search" id="ns-s-d" placeholder="점포·상품명 검색"><div class="seg" id="ns-str"><button data-v="0" class="on">전체</button><button data-v="1">평소 <span class="ns-n">7</span>일에 2개 이상 팔리던 품목만</button></div><span id="ns-sel"></span></div>
   <div class="tbl-wrap" id="ns-t-d"></div>
 </div>
@@ -313,7 +313,7 @@
   function load(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(src)};document.head.appendChild(s)})}
   load('data/manifest.js?t='+Date.now()).then(function(){
     var v=encodeURIComponent(E.manifest.updated||Date.now());
-    return Promise.all([load('data/master.js?v='+v)].concat(E.manifest.months.map(function(k){return load('data/'+k+'.js?v='+v)}))).then(function(){return load('assets/app.js?v='+v+'&c=3')});
+    return Promise.all([load('data/master.js?v='+v)].concat(E.manifest.months.map(function(k){return load('data/'+k+'.js?v='+v)}))).then(function(){return load('assets/app.js?v='+v+'&c=2')});
   }).then(function(){boot.remove()}).catch(function(src){
     boot.className='boot err';boot.innerHTML='데이터 파일을 불러오지 못했습니다: <b>'+src+'</b><br>data 폴더의 파일 이름과 manifest.js 의 months 목록이 맞는지 확인해 주세요.';
   });
