@@ -172,6 +172,21 @@ table.heat td.ret .rbadge{display:block;margin:1px auto 0;width:max-content}
 #ns-rec{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
 .boot{position:fixed;inset:auto 0 0 0;top:0;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text-2);font-size:15px;z-index:100;text-align:center;line-height:1.7;padding:20px}
 .boot.err{color:var(--up)}
+
+/* 미매출현황 */
+body.ns-on .pbar [data-per]{display:none}
+.jg{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:99px;border:1px solid;white-space:nowrap;line-height:18px}
+.j-out{color:var(--up);border-color:var(--up);background:color-mix(in srgb,var(--up) 10%,transparent)}
+.j-sus{color:#b45309;border-color:#d97706;background:color-mix(in srgb,#f59e0b 12%,transparent)}
+.j-slow{color:var(--down);border-color:color-mix(in srgb,var(--down) 55%,transparent);background:color-mix(in srgb,var(--down) 8%,transparent)}
+.j-all{color:var(--surface);border-color:var(--text-2);background:var(--text-2)}
+@media (prefers-color-scheme: dark){.j-sus{color:#fbbf24;border-color:#f59e0b}}
+table.t td.why{white-space:normal;min-width:300px;max-width:520px;line-height:1.5;font-size:12px}
+.kpi .l .jg{font-size:11px}
+.ns-how{margin-top:12px;padding:10px 14px}
+.ns-how summary{cursor:pointer;font-size:13px;color:var(--text-2)}
+.ns-how ul{margin:10px 0 2px;padding-left:18px;font-size:12.5px;line-height:1.7;color:var(--text-2)}
+#ns-jd small{color:inherit;opacity:.75;margin-left:2px}
 table.t tbody tr.more td{text-align:center;padding:10px;background:var(--surface-2)}
 table.t tbody tr.more:hover td{background:var(--surface-2)}
 table.t tr.more button{font:inherit;font-size:12px;padding:5px 12px;border:1px solid var(--border-2);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer;margin:0 3px}

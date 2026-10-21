@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>이마트 POS 대시보드</title>
-<link rel="stylesheet" href="assets/style.css?c=2">
+<link rel="stylesheet" href="assets/style.css?c=4">
 </head>
 <body>
 <div id="boot" class="boot">데이터를 불러오는 중…</div>
@@ -23,11 +23,11 @@
   <button data-s="pr">행사현황</button>
 </nav>
 <div class="pbar" id="pbar">
-  <div class="fld">기간 보기<div class="seg" id="pmode"><button data-v="m" class="on">월별</button><button data-v="c">누적</button></div></div>
-  <div class="fld" id="pmon-l">월 선택<div class="seg" id="pmon"></div></div>
-  <label class="fld">주차<select id="pwk"></select></label>
-  <div class="pcur" id="pcur"></div>
-  <div style="flex-basis:100%;height:0"></div>
+  <div data-per class="fld">기간 보기<div class="seg" id="pmode"><button data-v="m" class="on">월별</button><button data-v="c">누적</button></div></div>
+  <div data-per class="fld" id="pmon-l">월 선택<div class="seg" id="pmon"></div></div>
+  <label data-per class="fld">주차<select id="pwk"></select></label>
+  <div data-per class="pcur" id="pcur"></div>
+  <div data-per style="flex-basis:100%;height:0"></div>
   <div class="fld">점포 범위<div class="seg" id="sch"><button data-v="all" class="on">전체</button><button data-v="off">오프라인 점포만</button><button data-v="on">온라인 가상점만</button></div></div>
   <label class="fld">매출규모<select id="stier"></select></label>
   <label class="fld">매출 상위<select id="stop"></select></label>
@@ -225,31 +225,48 @@
 <!-- ================= 시트: 미매출현황 ================= -->
 <section class="sheet" id="sh-ns">
 <div class="filters">
+  <div class="fld">연속 미판매 기준<div class="seg" id="ns-n"><button data-v="7" class="on">7일 이상</button><button data-v="15">15일 이상</button></div></div>
   <label>점포유형<select id="ns-type"></select></label>
   <label>중분류<select id="ns-mid"></select></label>
   <label>브랜드<select id="ns-brand"></select></label>
-  <div class="fld">미매출 기준 (연속 무판매 일수)<div class="seg" id="ns-days"><button data-v="3">3일</button><button data-v="5">5일</button><button data-v="7" class="on">7일</button><button data-v="14">14일</button></div></div>
   <div class="active-f" id="ns-win"></div>
-  <div class="active-f" id="ns-rec"></div>
 </div>
 
 <section class="kpis" id="ns-kpis"></section>
 
-<div class="grid g2">
-  <div class="card"><h3>전 품목 미매출 점포</h3><p class="desc">최근 <span class="ns-n">7</span>일 동안 맥널티 상품이 하나도 팔리지 않은 점포 (이전 판매 이력 있음). 클릭하면 아래 상세가 그 점포로 좁혀집니다.</p><div id="ns-dead-s"></div></div>
-  <div class="card"><h3>전 점포 미매출 품목</h3><p class="desc">최근 <span class="ns-n">7</span>일 동안 어느 점포에서도 팔리지 않은 품목 (이전 판매 이력 있음). 클릭하면 아래 상세가 그 품목으로 좁혀집니다.</p><div id="ns-dead-p"></div></div>
-</div>
+<details class="card ns-how">
+  <summary><b>판정 방법</b> — 판매 부진인지, 점포에서 빠졌는지 어떻게 구분하나요?</summary>
+  <ul>
+    <li><b>대상</b>: 판매 이력이 있는 점포×품목 중 마지막 판매 이후 7일(또는 15일) 이상 연속 판매가 0인 조합. 한 번도 팔린 적 없는 조합(미취급)은 제외합니다.</li>
+    <li><b>기대 수량</b> = 이 점포의 평소 판매 비중(마지막 판매 전 최대 60일, 다른 점포 대비 · 오프라인은 오프라인끼리, 온라인 가상점은 전 점포와 비교) × 판매가 끊긴 기간 동안 다른 점포 판매량.
+      시즌·행사 종료·명절로 전 점포 판매가 줄면 기대 수량도 같이 줄어들어, 수요 감소를 이탈로 잘못 판정하지 않습니다.</li>
+    <li><span class="jg j-out">점포 이탈 추정</span> 기대 3개 이상인데 0개 (우연히 0개일 확률 5% 이하) + 다른 점포에선 판매 중 + 이 점포 다른 품목도 판매 중 → 진열 제외·결품 가능성이 높습니다.</li>
+    <li><span class="jg j-sus">이탈 의심</span> 기대 1.5~3개인데 0개 → 다음 데이터에서도 0이면 매장 확인.</li>
+    <li><span class="jg j-slow">판매 부진</span> 기대 1.5개 미만이거나, 판매한 날이 3일 미만(간헐 판매) → 원래 이 점포에서 잘 안 팔리는 품목.</li>
+    <li><span class="jg j-all">품목 전체 미판매</span> 전 점포에서 판매 0 → 단종·공급 중단 확인. <span class="jg j-all">점포 전체 미판매</span> 그 점포 맥널티 전 품목 판매 0 → 휴점·거래 중단·데이터 누락 확인.</li>
+    <li>POS 판매 데이터만으로는 <b>결품</b>과 <b>진열 제외(빠짐)</b>를 완전히 구분할 수 없습니다. '점포 이탈 추정'은 매장 확인 우선순위로 활용하세요.</li>
+  </ul>
+</details>
 
-<div class="grid g2" style="margin-top:12px">
-  <div class="card"><div class="card-h"><div><h3>점포별 미매출 품목</h3><p class="desc">판매 이력 품목 = <span class="ns-n">7</span>일 이전에 한 번이라도 팔린 품목. 행 클릭 시 아래 상세 필터</p></div><button class="btn sm" id="ns-x-s">CSV</button></div>
-    <div class="tbl-tools"><input type="search" id="ns-s-s" placeholder="점포명 검색"></div><div class="tbl-wrap" id="ns-t-s" style="max-height:420px"></div></div>
-  <div class="card"><div class="card-h"><div><h3>품목별 미매출 점포</h3><p class="desc">판매 이력 점포 = <span class="ns-n">7</span>일 이전에 한 번이라도 판매한 점포. 행 클릭 시 아래 상세 필터</p></div><button class="btn sm" id="ns-x-p">CSV</button></div>
-    <div class="tbl-tools"><input type="search" id="ns-s-p" placeholder="상품명 검색"></div><div class="tbl-wrap" id="ns-t-p" style="max-height:420px"></div></div>
+<div class="card" style="margin-top:12px">
+  <div class="card-h"><div><h3>품목별 미판매 현황</h3><p class="desc">미판매 점포를 판정별로 나눈 수. 판정 = 품목 단위 요약, 근거 = 판단 이유. 행을 클릭하면 아래 상세가 그 품목으로 좁혀집니다.</p></div><button class="btn sm" id="ns-x-p">CSV</button></div>
+  <div class="tbl-tools"><input type="search" id="ns-s-p" placeholder="상품명 검색"></div>
+  <div class="tbl-wrap" id="ns-t-p" style="max-height:440px"></div>
 </div>
 
 <div class="card" style="margin-top:12px">
-  <div class="card-h"><div><h3>점포 × 품목 미매출 상세</h3><p class="desc">해당 점포에서 팔린 적이 있는데 최근 <span class="ns-n">7</span>일 연속 판매가 없는 품목. 직전 30일 실적이 큰 순 = 놓치고 있는 매출이 큰 순입니다. <b><span class="ns-n">7</span>일 기대 수량</b> = 직전 기간 일평균 × <span class="ns-n">7</span>. 2개 이상(빨간색)인데 안 팔렸다면 결품·진열 이탈 가능성이 높습니다.</p></div><button class="btn sm" id="ns-x-d">CSV 내보내기</button></div>
-  <div class="tbl-tools"><input type="search" id="ns-s-d" placeholder="점포·상품명 검색"><div class="seg" id="ns-str"><button data-v="0" class="on">전체</button><button data-v="1">평소 <span class="ns-n">7</span>일에 2개 이상 팔리던 품목만</button></div><span id="ns-sel"></span></div>
+  <div class="card-h"><div><h3>점포별 미판매 현황</h3><p class="desc">미판매 품목을 판정별로 나눈 수. 행을 클릭하면 아래 상세가 그 점포로 좁혀집니다.</p></div><button class="btn sm" id="ns-x-s">CSV</button></div>
+  <div class="tbl-tools"><input type="search" id="ns-s-s" placeholder="점포명 검색"></div>
+  <div class="tbl-wrap" id="ns-t-s" style="max-height:440px"></div>
+</div>
+
+<div class="card" style="margin-top:12px">
+  <div class="card-h"><div><h3>점포 × 품목 상세</h3><p class="desc">판정 순(이탈 추정 → 의심 → 부진), 같은 판정 안에서는 기대 수량이 큰 순. 평소 월매출 = 판매가 끊기기 전 속도로 한 달 팔았을 때의 금액.</p></div><button class="btn sm" id="ns-x-d">CSV 내보내기</button></div>
+  <div class="tbl-tools">
+    <input type="search" id="ns-s-d" placeholder="점포·상품명 검색">
+    <div class="seg" id="ns-jd"><button data-v="all" class="on">전체 <small></small></button><button data-v="out">점포 이탈 추정 <small></small></button><button data-v="sus">이탈 의심 <small></small></button><button data-v="slow">판매 부진 <small></small></button><button data-v="dead">전체 미판매 <small></small></button></div>
+    <span id="ns-sel"></span>
+  </div>
   <div class="tbl-wrap" id="ns-t-d"></div>
 </div>
 </section>
@@ -313,7 +330,7 @@
   function load(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(src)};document.head.appendChild(s)})}
   load('data/manifest.js?t='+Date.now()).then(function(){
     var v=encodeURIComponent(E.manifest.updated||Date.now());
-    return Promise.all([load('data/master.js?v='+v)].concat(E.manifest.months.map(function(k){return load('data/'+k+'.js?v='+v)}))).then(function(){return load('assets/app.js?v='+v+'&c=2')});
+    return Promise.all([load('data/master.js?v='+v)].concat(E.manifest.months.map(function(k){return load('data/'+k+'.js?v='+v)}))).then(function(){return load('assets/app.js?v='+v+'&c=4')});
   }).then(function(){boot.remove()}).catch(function(src){
     boot.className='boot err';boot.innerHTML='데이터 파일을 불러오지 못했습니다: <b>'+src+'</b><br>data 폴더의 파일 이름과 manifest.js 의 months 목록이 맞는지 확인해 주세요.';
   });

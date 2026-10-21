@@ -166,7 +166,7 @@ function scatter(el,{pts,xl,yl,refX,refY,groups,tipF,labelIf}){
 // col: {k,l,f,g,v(row),h(row),nm,tl,nf(합계행 비움)}
 const KO=new Intl.Collator('ko');
 const TPAGE=200;
-function table(el,opt){const{cols,data,key,sort,dir=-1,onClick,sel,foot,first}=opt;
+function table(el,opt){const{cols,data,key,sort,dir=-1,onClick,sel,foot,first,limit=TPAGE}=opt;
   if(!el._st||!cols.some(c=>c.k===el._st.sort))el._st={sort,dir};const st=el._st;const c=cols.find(c=>c.k===st.sort)||cols[0];
   const val=(r,c)=>c.v?c.v(r):r[c.k];
   const rows=[...data].sort((a,b)=>{let x=val(a,c),y=val(b,c);if(typeof x==='string'||typeof y==='string')return st.dir*KO.compare(String(x??''),String(y??''));x=x==null||isNaN(x)?-Infinity:x;y=y==null||isNaN(y)?-Infinity:y;if(x===Infinity)x=1e15;if(y===Infinity)y=1e15;return st.dir*(x-y)});
@@ -174,9 +174,9 @@ function table(el,opt){const{cols,data,key,sort,dir=-1,onClick,sel,foot,first}=o
   const tl=c=>c.f==='text'||c.tl?'tl':'';
   let h=`<table class="t"><thead>`;if(cols.some(c=>c.g)){h+='<tr>';let i=0;while(i<cols.length){const g=cols[i].g||'';let n=1;while(i+n<cols.length&&(cols[i+n].g||'')===g&&g)n++;h+=`<th class="grp ${i===0&&first?'first':''}" colspan="${n}">${g}</th>`;i+=n}h+='</tr>'}
   h+='<tr>'+cols.map((c,i)=>`<th data-k="${c.k}" class="${tl(c)} ${i===0&&first?'first':''}">${c.l}${st.sort===c.k?`<span class="ar">${st.dir<0?'▼':'▲'}</span>`:''}</th>`).join('')+'</tr></thead><tbody>';
-  if(el._sig!==data){el._sig=data;el._lim=TPAGE}if(sel!=null){const si=rows.findIndex(r=>r[key]===sel);if(si>=el._lim)el._lim=si+1}
+  if(el._sig!==data){el._sig=data;el._lim=limit}if(sel!=null){const si=rows.findIndex(r=>r[key]===sel);if(si>=el._lim)el._lim=si+1}
   const shown=rows.length>el._lim?rows.slice(0,el._lim):rows;
-  for(const r of shown)h+=`<tr class="${onClick?'click':''} ${sel!=null&&r[key]===sel?'sel':''}" data-id="${r[key]}">`+cols.map((c,i)=>`<td class="${tl(c)} ${c.nm?'nm':''} ${i===0&&first?'first':''}" ${c.nm?`title="${esc(val(r,c))}"`:''}>${fmt(r,c)}</td>`).join('')+'</tr>';
+  for(const r of shown)h+=`<tr class="${onClick?'click':''} ${sel!=null&&r[key]===sel?'sel':''}" data-id="${r[key]}">`+cols.map((c,i)=>`<td class="${tl(c)} ${c.nm?'nm':''} ${c.cls||''} ${i===0&&first?'first':''}" ${c.nm?`title="${esc(val(r,c))}"`:''}>${fmt(r,c)}</td>`).join('')+'</tr>';
   if(shown.length<rows.length)h+=`<tr class="more"><td colspan="${cols.length}"><button type="button" data-more="1">${fInt(shown.length)} / ${fInt(rows.length)}행 표시 · ${fInt(Math.min(TPAGE*5,rows.length-shown.length))}행 더 보기</button> <button type="button" data-more="all">전체 보기</button></td></tr>`;
   h+='</tbody>';if(foot)h+=`<tfoot><tr>${cols.map((c,i)=>`<td class="${tl(c)} ${i===0&&first?'first':''}">${i===0?esc(foot.label):(c.nf||c.f==='text'||(c.f==='html'&&!c.ff))?'':fmt(foot,c)}</td>`).join('')}</tr></tfoot>`;
   el.innerHTML=h+'</table>';el._rows=rows;el._cols=cols;
@@ -451,77 +451,133 @@ let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>renderS
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{CSSC={};renderTab()});
 
 /* ================= 시트: 미매출현황 ================= */
-let NS_DAYS=7;
-const NSF={type:'all',mid:'all',brand:'all',store:null,prod:null,strong:false};
+// 기준일 = 등록된 데이터의 최신 판매일 (상단 기간 선택과 무관).
+// 대상 = 판매 이력이 있는 점포×품목 중 마지막 판매 후 N일(7/15) 이상 연속 판매 0인 조합.
+// 판정 = 같은 채널 다른 점포의 같은 기간 판매로 '평소라면 팔렸을 수량(기대 수량)'을 계산해서
+//        기대가 큰데 0개면 점포 이탈(진열 제외·결품) 추정, 기대가 작으면 판매 부진.
 const LAST=(()=>{let L=0;for(const r of ROWS)for(let i=ND-1;i>L;i--)if(r.q[i]!==0){L=i;break}return L})();
-let NS_WE,NS_WS,NS_PE,NS_PS;
-function nsWin(){NS_WE=Math.min(CURR.e,LAST);NS_WS=NS_WE-NS_DAYS+1;NS_PE=NS_WS-1;NS_PS=Math.max(0,NS_WS-30)}
+const NSF={N:7,type:'all',mid:'all',brand:'all',store:null,prod:null,jd:'all'};
+const NS_J={pdead:{l:'품목 전체 미판매',c:'j-all',o:0},sdead:{l:'점포 전체 미판매',c:'j-all',o:1},out:{l:'점포 이탈 추정',c:'j-out',o:2},sus:{l:'이탈 의심',c:'j-sus',o:3},slow:{l:'판매 부진',c:'j-slow',o:4}};
+const NS_E_OUT=3, NS_E_SUS=1.5, NS_MIN_DAYS=3, NS_BASE=60;
+// 채널별(오프라인 / 온라인 가상점) 품목 일별 판매 합계 — 기대 수량의 기준
+// 오프라인 점포는 오프라인 점포끼리, 온라인 가상점(3곳뿐)은 전체 점포와 비교
+const NS_NET=(()=>{const off=PRODS.map(()=>new Float64Array(ND)),on=PRODS.map(()=>new Float64Array(ND));
+  for(const r of ROWS){for(let g=0;g<ND;g++)if(r.q[g]>0){on[r.p][g]+=r.q[g];if(!STORES[r.s].online)off[r.p][g]+=r.q[g]}}
+  const first=a=>{for(let g=0;g<ND;g++)if(a[g]>0)return g;return-1};return{off,on,fOff:off.map(first),fOn:on.map(first)}})();
+const nsSum=(a,s,e)=>{let t=0;for(let g=Math.max(0,s);g<=e;g++)t+=a[g];return t};
+const nsP=p=>p<0.001?'0.1% 미만':(p*100).toFixed(p<0.1?1:0)+'%';
+const nsJ=j=>`<span class="jg ${NS_J[j].c}">${NS_J[j].l}</span>`;
+const nsSlug=s=>s.replace(/^맥널티(커피)?\s?/,'').replace(/^행복을주는커피\s?/,'');
+
 function nsBuildFilters(){
   const t=$('ns-type');t.innerHTML=`<option value="all">전체 유형</option>`+uniq(STORES.map(s=>s.type)).map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');t.value=NSF.type;
   NSF.mid=opts($('ns-mid'),uniq(PRODS.map(p=>p.mid)).sort().map(x=>[x,x]),NSF.mid,'전체');
-  NSF.brand=opts($('ns-brand'),uniq(PRODS.map(p=>p.brand)).map(x=>[x,x]),NSF.brand,'전체');}
-
+  NSF.brand=opts($('ns-brand'),uniq(PRODS.map(p=>p.brand)).map(x=>[x,x]),NSF.brand,'전체')}
 ['type','mid','brand'].forEach(k=>$('ns-'+k).addEventListener('change',e=>{NSF[k]=e.target.value;NSF.store=null;NSF.prod=null;renderNS()}));
 
-function nsCompute(){
-  const rows=ROWS.filter(r=>{const s=STORES[r.s],p=PRODS[r.p];return SOK[r.s]&&(NSF.type==='all'||s.type===NSF.type)&&(NSF.mid==='all'||p.mid===NSF.mid)&&(NSF.brand==='all'||p.brand===NSF.brand)});
-  const S=new Map(),P=new Map(),pairs=[],SUBV={};let hist=0;
-  const get=(m,k)=>{let o=m.get(k);if(!o){o={id:k,hist:0,stall:0,stallA:0,stallQ:0,preA:0,preQ:0,dq:new Float64Array(NS_WE+1)};m.set(k,o)}return o};
-  for(const r of rows){const s=get(S,r.s),p=get(P,r.p);for(let i=0;i<=NS_WE;i++){s.dq[i]+=r.q[i];p.dq[i]+=r.q[i]}
-    let preQ=0,preA=0;for(let i=NS_PS;i<=NS_PE;i++){preQ+=r.q[i];preA+=r.a[i]}s.preA+=preA;s.preQ+=preQ;p.preA+=preA;p.preQ+=preQ;
-    let last=-1;for(let i=NS_WE;i>=0;i--)if(r.q[i]>0){last=i;break}
-    let h=false;for(let i=0;i<NS_WS;i++)if(r.q[i]>0){h=true;break}
-    if(h){hist++;s.hist++;p.hist++;const sb=PRODS[r.p].sub;(SUBV[sb]||(SUBV[sb]=[])).push(preQ/(NS_PE-NS_PS+1))}
-    if(last>=0&&last<NS_WS){s.stall++;p.stall++;s.stallA+=preA;p.stallA+=preA;s.stallQ+=preQ;p.stallQ+=preQ;
-      const St=STORES[r.s],Pr=PRODS[r.p];pairs.push({id:pairs.length,s:r.s,p:r.p,store:St.name,type:St.type,prod:Pr.name,sub:Pr.sub,last,streak:NS_WE-last,preQ,preA,avg:preQ/(NS_PE-NS_PS+1)})}}
-  const lastOf=o=>{for(let i=NS_WE;i>=0;i--)if(o.dq[i]>0)return i;return-1};
-  const fin=(m,info)=>[...m.values()].map(o=>{const l=lastOf(o);return Object.assign(o,info(o.id),{last:l,dead:l>=0&&l<NS_WS,streak:l>=0?NS_WE-l:null})});
-  const ss=fin(S,i=>({name:STORES[i].name,type:STORES[i].type})),ps=fin(P,i=>({name:PRODS[i].name,sub:PRODS[i].sub,brand:PRODS[i].brand}));
-  return{ss,ps,pairs,hist,SUBV,nSt:ss.filter(o=>o.last>=0).length,nPr:ps.filter(o=>o.last>=0).length}}
+function nsCompute(N){
+  const WS=LAST-N+1;
+  const US=STORES.filter(s=>SOK[s.i]&&(NSF.type==='all'||s.type===NSF.type));
+  const pOK=p=>(NSF.mid==='all'||p.mid===NSF.mid)&&(NSF.brand==='all'||p.brand===NSF.brand);
+  const inS=new Uint8Array(STORES.length);US.forEach(s=>inS[s.i]=1);
+  // 최근 N일 판매 현황: 점포별 판매 품목 수(전 품목), 품목별 판매 점포 수(채널별, 전 점포)
+  const sAct=new Uint16Array(STORES.length),pOff=new Uint16Array(PRODS.length),pOn=new Uint16Array(PRODS.length),pLast=new Int16Array(PRODS.length).fill(-1),sLast=new Int16Array(STORES.length).fill(-1);
+  for(const r of ROWS){let w=false,l=-1;for(let g=LAST;g>=0;g--)if(r.q[g]>0){l=g;break}if(l>=WS)w=true;
+    if(l>pLast[r.p])pLast[r.p]=l;if(l>sLast[r.s])sLast[r.s]=l;if(w){sAct[r.s]++;(STORES[r.s].online?pOn:pOff)[r.p]++}}
+  const S=new Map(),P=new Map(),pairs=[];let hist=0;
+  const mkO=(id,info)=>Object.assign({id,hist:0,act:0,miss:0,pdead:0,sdead:0,out:0,sus:0,slow:0,loss:0,outL:[],tierA:0},info);
+  const gS=i=>S.get(i)||(S.set(i,mkO(i,{name:STORES[i].name,type:STORES[i].type})),S.get(i));
+  const gP=i=>P.get(i)||(P.set(i,mkO(i,{name:PRODS[i].name,sub:PRODS[i].sub})),P.get(i));
+  for(const r of ROWS){if(!inS[r.s]||!pOK(PRODS[r.p]))continue;
+    let last=-1;for(let g=LAST;g>=0;g--)if(r.q[g]>0){last=g;break}
+    if(last<0)continue;                                   // 판매 이력 없는 조합(미취급)은 대상 아님
+    const so=gS(r.s),po=gP(r.p);so.hist++;po.hist++;hist++;
+    if(last>=WS){so.act++;po.act++;continue}
+    const St=STORES[r.s],Pr=PRODS[r.p],on=St.online,net=(on?NS_NET.on:NS_NET.off)[r.p],pf=(on?NS_NET.fOn:NS_NET.fOff)[r.p];
+    const gs=last+1,bs=Math.max(Math.max(0,pf),gs-NS_BASE),bd=Math.max(1,gs-bs),gap=LAST-gs+1,streak=LAST-last;
+    let sq=0,sa=0,sd=0;for(let g=bs;g<gs;g++)if(r.q[g]>0){sq+=r.q[g];sa+=r.a[g];sd++}
+    const nAll=nsSum(net,bs,gs-1),nq=nAll-sq,ngap=nsSum(net,gs,LAST);
+    const share=nq>0?sq/nq:0,E=share*ngap,p0=Math.exp(-E),wk=sq/bd*7,price=sq?sa/sq:0,mon=sq/bd*30*price;
+    const trend=nAll>0?(ngap/gap)/(nAll/bd)-1:0;
+    const pAct=on?pOff[r.p]+pOn[r.p]:pOff[r.p],pAll=pOff[r.p]+pOn[r.p],sA=sAct[r.s];
+    let j,why,sub='';
+    if(pAll===0){j='pdead';why=`전 점포에서 ${N}일 이상 판매 0 (품목 마지막 판매 ${pLast[r.p]>=0?dLab(pLast[r.p]):'-'})`;sub='단종·공급 중단·일괄 철수 여부 확인'}
+    else if(sA===0){j='sdead';why=`이 점포 맥널티 전 품목 ${N}일 이상 판매 0 (점포 마지막 판매 ${sLast[r.s]>=0?dLab(sLast[r.s]):'-'})`;sub='휴점·거래 중단·POS 데이터 누락 여부 확인'}
+    else if(sd<NS_MIN_DAYS){j='slow';why=`데이터 기간 중 판매한 날이 ${sd}일(${fInt(sq)}개)뿐 → 간헐 판매, ${streak}일째 0개`;sub='상시 취급 품목이 아닐 가능성'}
+    else if(E>=NS_E_OUT){j='out';why=`평소 주 ${wk.toFixed(1)}개 → ${streak}일째 0개. 끊긴 기간 다른 점포 판매로 보면 기대 ${E.toFixed(1)}개, 우연히 0개일 확률 ${nsP(p0)}`;sub=`최근 ${N}일 다른 점포 ${pAct}곳에서 판매 · 이 점포 다른 맥널티 ${sA}개 품목도 판매 중 → 진열 제외·결품 확인`}
+    else if(E>=NS_E_SUS){j='sus';why=`평소 주 ${wk.toFixed(1)}개 → ${streak}일째 0개. 기대 ${E.toFixed(1)}개, 우연히 0개일 확률 ${nsP(p0)}`;sub='부진일 수도 있음 → 다음 데이터에서도 0이면 매장 확인'}
+    else{j='slow';why=`평소 주 ${wk.toFixed(1)}개 → 같은 기간 기대 ${E.toFixed(1)}개뿐, 0개일 확률 ${nsP(p0)}`;sub='원래 이 점포에서 판매가 적은 품목'}
+    if(trend<=-0.3&&j!=='pdead'&&j!=='sdead')sub+=` · 같은 기간 전 점포 판매도 ${Math.round(trend*100)}%${j==='out'?' (시즌·행사 종료 후 점포가 뺐을 가능성)':' (수요 감소)'}`;
+    so.miss++;po.miss++;so[j]++;po[j]++;
+    if(j==='out'||j==='sus'){so.loss+=mon;po.loss+=mon}
+    if(j==='out'){so.outL.push(Pr.name);po.outL.push(St.name);if(TIER.get(r.s)==='A')po.tierA++}
+    const ok=sd>=NS_MIN_DAYS&&bd>=7&&j!=='pdead'&&j!=='sdead';
+    pairs.push({id:pairs.length,s:r.s,p:r.p,store:St.name,type:St.type,prod:Pr.name,sub:Pr.sub,j,why,whyS:sub,last,streak,wk:ok?wk:null,E:ok?E:null,p0,mon:ok?mon:0,ord:NS_J[j].o})}
+  // 품목·점포 단위 요약 판정 (품목 추세 = 오프라인 전 점포 최근 4주 vs 그 전 4주)
+  const pTrend=i=>{const a=NS_NET.off[i],c=nsSum(a,LAST-27,LAST),b=nsSum(a,LAST-55,LAST-28);return b>0?c/b-1:null};
+  const prodRows=[...P.values()].filter(o=>o.miss>0).map(o=>{const tot=pOff[o.id]+pOn[o.id];let st,why;
+    if(tot===0){st='pdead';why=`전 점포 ${N}일 이상 판매 0 · 마지막 판매 ${pLast[o.id]>=0?dLab(pLast[o.id]):'-'} → 단종·공급 중단 확인`}
+    else if(o.out>=Math.max(3,o.hist*0.3)){const tr=pTrend(o.id);st='out';why=`취급 ${o.hist}점 중 ${o.out}점 이탈 추정${o.tierA?` (Tier A ${o.tierA}점)`:''}`+(tr!=null&&tr<=-0.4?` · 전 점포 판매도 최근 4주 ${Math.round(tr*100)}% → 시즌 아웃 진행 중(점포들이 빼는 중)`:' → 본사 공급·이마트 발주 확인')}
+    else if(o.out>0){st='sus';why=`이탈 추정 ${o.out}점: ${o.outL.slice(0,3).join(', ')}${o.out>3?` 외 ${o.out-3}점`:''}`}
+    else{st='slow';why=`미판매 ${o.miss}점 모두 판매 부진(원래 판매가 적은 점포)`}
+    const tr=pTrend(o.id);if(st==='sus'&&tr!=null&&tr<=-0.4)why+=` · 전 점포 판매 최근 4주 ${Math.round(tr*100)}%`;
+    return Object.assign(o,{st,stL:st==='out'?'다수 점포 이탈':st==='sus'?'일부 점포 이탈':st==='pdead'?'품목 전체 미판매':'판매 부진 위주',why})});
+  const storeRows=[...S.values()].filter(o=>o.miss>0).map(o=>{let st,why;
+    if(sAct[o.id]===0){st='pdead';why=`맥널티 전 품목 ${N}일 이상 판매 0 · 마지막 판매 ${sLast[o.id]>=0?dLab(sLast[o.id]):'-'} → 휴점·거래 중단 확인`}
+    else if(o.out>=Math.max(5,o.hist*0.25)){st='out';why=`이탈 추정 ${o.out}개: ${o.outL.slice(0,3).map(nsSlug).join(', ')}${o.out>3?` 외 ${o.out-3}개`:''} → 진열 축소·발주 누락 점검`}
+    else if(o.out>0){st='sus';why=`이탈 추정 ${o.out}개: ${o.outL.slice(0,3).map(nsSlug).join(', ')}${o.out>3?` 외 ${o.out-3}개`:''}`}
+    else{st='slow';why=`미판매 ${o.miss}개 모두 판매 부진(원래 판매가 적은 품목)`}
+    return Object.assign(o,{st,stL:st==='out'?'다품목 이탈':st==='sus'?'일부 품목 이탈':st==='pdead'?'점포 전체 미판매':'판매 부진 위주',why})});
+  const cnt=j=>pairs.filter(p=>p.j===j).length;
+  return{N,WS,pairs,prodRows,storeRows,hist,nSt:US.length,
+    c:{out:cnt('out'),sus:cnt('sus'),slow:cnt('slow'),pdead:cnt('pdead'),sdead:cnt('sdead')},
+    loss:pairs.reduce((t,p)=>t+(p.j==='out'||p.j==='sus'?p.mon:0),0),
+    pDead:[...P.values()].filter(o=>pOff[o.id]+pOn[o.id]===0&&o.miss>0),sDead:[...S.values()].filter(o=>sAct[o.id]===0&&o.miss>0)}}
 
-function nsRec(R){const opt=[3,5,7,14];const rows=Object.entries(R.SUBV).map(([sb,a])=>{a.sort((x,y)=>x-y);const med=a[Math.floor(a.length/2)]||0;const need=med>0?2/med:Infinity;const rec=opt.find(d=>d>=need);return{sb,med,rec,n:a.length}}).sort((a,b)=>b.med-a.med);
-  $('ns-rec').innerHTML='<span class="note">회전 속도별 권장 기준 (점포당 일평균 판매량 중앙값 → 평소 2개 팔리는 데 걸리는 일수):</span> '+rows.map(o=>`<span class="chip" style="${o.rec===NS_DAYS?'border-color:var(--accent);color:var(--accent)':''}"><b>${esc(o.sb)}</b> ${o.med.toFixed(2)}개/일 → ${o.rec?o.rec+'일':'14일 이상'}</span>`).join('')}
-const lastTxt=r=>r.last>=0?dLab(r.last):'-';
-function nsWinText(){
-  const nts=[];for(let g=NS_WS;g<=NS_WE;g++)if(DAYS[g].note)nts.push(`${DAYS[g].m}/${DAYS[g].d} ${DAYS[g].note}`);
-  $('ns-win').innerHTML=`미매출 기간: <b>${dLab(NS_WS)} ~ ${dLab(NS_WE)}</b> (선택 기간 마지막 날 기준 ${NS_DAYS}일) · 비교 실적: 직전 ${NS_PE-NS_PS+1}일 ${dLab(NS_PS)} ~ ${dLab(NS_PE)}${nts.length?`<br><span class="down">※ 이 기간에 ${nts.join(', ')}이 포함되어 있어 평소보다 미매출이 많게 나올 수 있습니다.</span>`:''}`}
-function renderNS(){document.querySelectorAll('.ns-n').forEach(e=>e.textContent=NS_DAYS);nsWin();if(NS_WS<1){$('ns-win').innerHTML='';['ns-kpis','ns-dead-s','ns-dead-p','ns-t-s','ns-t-p','ns-t-d'].forEach(id=>$(id).innerHTML='');$('ns-kpis').innerHTML=`<div class="empty" style="grid-column:1/-1">선택 기간 마지막 날(${dLab(NS_WE)}) 이전 데이터가 ${NS_DAYS}일보다 짧아 ${NS_DAYS}일 연속 미매출을 판단할 수 없습니다. 더 뒤의 기간을 선택해 주세요.</div>`;return}nsWinText();const R=nsCompute();nsRec(R);
-  const dS=R.ss.filter(o=>o.dead).sort((a,b)=>b.preA-a.preA),dP=R.ps.filter(o=>o.dead).sort((a,b)=>b.preA-a.preA);
-  const pA=R.pairs.reduce((s,p)=>s+p.preA,0);
+let NS_R=null;
+function renderNS(){
+  const R=nsCompute(NSF.N),R2=nsCompute(NSF.N===7?15:7),R7=NSF.N===7?R:R2,R15=NSF.N===7?R2:R;NS_R=R;
+  const nts=[];for(let g=R.WS;g<=LAST;g++)if(DAYS[g].note)nts.push(`${DAYS[g].m}/${DAYS[g].d} ${DAYS[g].note}`);
+  $('ns-win').innerHTML=`기준일: <b>${dLab(LAST)}</b> (등록 데이터 최신일) · 연속 미판매 ${NSF.N}일 = 마지막 판매가 <b>${dLab(R.WS-1)} 이전</b>인 조합 · 상단 기간 선택과 무관`+
+    (nts.length?`<br><span class="flat">이 기간 휴일: ${nts.join(', ')} — 기대 수량은 같은 기간 다른 점포 판매로 계산하므로 휴일 영향이 반영됩니다.</span>`:'');
   const k=(l,v,c)=>`<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="c">${c}</div></div>`;
   $('ns-kpis').innerHTML=
-    k(`${NS_DAYS}일+ 전 품목 미매출 점포`,`${dS.length}점`,`판매 점포 ${R.nSt}점 중 · 맥널티 상품 0건`)+
-    k(`${NS_DAYS}일+ 전 점포 미매출 품목`,`${dP.length}개`,`판매 품목 ${R.nPr}개 중 · 어느 점포에서도 0건`)+
-    k('점포×품목 미매출',`${fInt(R.pairs.length)}건`,`판매 이력 ${fInt(R.hist)}건 중 ${R.hist?(R.pairs.length/R.hist*100).toFixed(1):0}%`)+
-    k('미매출 건의 직전 30일 매출',`${fMan(pA)}원`,'평소 팔리던 규모 (놓치고 있는 매출 참고)');
-  const chip=(o,kind)=>`<span class="chip ns-chip" data-k="${kind}" data-i="${o.id}" style="cursor:pointer"><b>${esc(o.name)}</b> ${o.streak}일째 · 직전30일 ${fMan(o.preA)}</span>`;
-  $('ns-dead-s').innerHTML=dS.length?`<div class="chips">${dS.map(o=>chip(o,'s')).join('')}</div>`:'<div class="empty">해당 점포 없음</div>';
-  $('ns-dead-p').innerHTML=dP.length?`<div class="chips">${dP.map(o=>chip(o,'p')).join('')}</div>`:'<div class="empty">해당 품목 없음</div>';
-  document.querySelectorAll('.ns-chip').forEach(c=>c.onclick=()=>{if(c.dataset.k==='s'){NSF.store=+c.dataset.i;NSF.prod=null}else{NSF.prod=+c.dataset.i;NSF.store=null}nsDetail(R);$('ns-t-d').scrollIntoView({behavior:'smooth',block:'center'})});
-  const dead=r=>r.dead?' <span class="pill" style="color:var(--down)">전체 미매출</span>':'';
-  const qs=$('ns-s-s').value.trim(),qp=$('ns-s-p').value.trim();
-  table($('ns-t-s'),{key:'id',sort:'stall',first:1,sel:NSF.store,data:R.ss.filter(o=>o.stall>0&&(!qs||o.name.includes(qs))),onClick:id=>{NSF.store=+id;NSF.prod=null;renderNS()},
-    cols:[{k:'name',l:'점포',f:'html',tl:1,h:r=>esc(r.name)+dead(r),v:r=>r.name,csv:r=>r.name},{k:'type',l:'유형',f:'text'},tierCol(),{k:'stall',l:'미매출 품목',f:'int'},{k:'hist',l:'판매 이력 품목',f:'int'},{k:'rt',l:'미매출 비중',f:'pct',v:r=>dv(r.stall,r.hist)},{k:'stallA',l:'미매출 품목 직전30일 매출',f:'int'},{k:'lastd',l:'점포 마지막 판매일',f:'html',tl:1,h:lastTxt,v:r=>r.last,csv:lastTxt}]});
-  table($('ns-t-p'),{key:'id',sort:'stall',first:1,sel:NSF.prod,data:R.ps.filter(o=>o.stall>0&&(!qp||o.name.includes(qp))),onClick:id=>{NSF.prod=+id;NSF.store=null;renderNS()},
-    cols:[{k:'name',l:'상품명',f:'html',tl:1,nm:1,h:r=>esc(r.name)+dead(r),v:r=>r.name,csv:r=>r.name},{k:'sub',l:'소분류',f:'text'},{k:'stall',l:'미매출 점포',f:'int'},{k:'hist',l:'판매 이력 점포',f:'int'},{k:'rt',l:'미매출 비중',f:'pct',v:r=>dv(r.stall,r.hist)},{k:'stallA',l:'미매출 점포 직전30일 매출',f:'int'},{k:'lastd',l:'품목 마지막 판매일',f:'html',tl:1,h:lastTxt,v:r=>r.last,csv:lastTxt}]});
-  nsDetail(R)}
-function nsDetail(R){const q=$('ns-s-d').value.trim();
-  let d=R.pairs.filter(p=>(NSF.store==null||p.s===NSF.store)&&(NSF.prod==null||p.p===NSF.prod)&&(!q||p.store.includes(q)||p.prod.includes(q))&&(!NSF.strong||p.avg*NS_DAYS>=2));
+    k(`${NSF.N}일 이상 연속 미판매`,`${fInt(R.pairs.length)}건`,`판매 이력 있는 점포×품목 ${fInt(R.hist)}건 중 · 7일 ${fInt(R7.pairs.length)}건 / 15일 ${fInt(R15.pairs.length)}건`)+
+    k(`${nsJ('out')}`,`${fInt(R.c.out)}건`,`${nsJ('sus')} ${fInt(R.c.sus)}건 · 평소 월 매출 ${fMan(R.loss)}원 규모`)+
+    k(`${nsJ('slow')}`,`${fInt(R.c.slow)}건`,'원래 판매가 적거나 간헐적으로 팔리던 조합')+
+    k(`${nsJ('pdead')} · ${nsJ('sdead')}`,`${R.pDead.length}개 · ${R.sDead.length}점`,(R.pDead.length||R.sDead.length)?[...R.pDead.map(o=>nsSlug(o.name)),...R.sDead.map(o=>o.name)].slice(0,4).join(', ')+((R.pDead.length+R.sDead.length)>4?' 외':''):'없음');
+  const qp=$('ns-s-p').value.trim(),qs=$('ns-s-s').value.trim();
+  const stCol=lab=>({k:'st',l:'판정',f:'html',h:r=>`<span class="jg ${NS_J[r.st].c}">${r.stL}</span>`,v:r=>NS_J[r.st].o*1e6-r.out,csv:r=>r.stL});
+  const whyCol={k:'why',l:'근거',f:'html',tl:1,cls:'why',h:r=>esc(r.why),v:r=>r.why,csv:r=>r.why};
+  table($('ns-t-p'),{key:'id',sort:'st',dir:1,first:1,sel:NSF.prod,data:R.prodRows.filter(o=>!qp||o.name.includes(qp)),onClick:id=>{NSF.prod=+id;NSF.store=null;NSF.jd='all';nsDetail();nsMark()},
+    cols:[{k:'name',l:'상품명',f:'text',nm:1},stCol(),whyCol,{k:'miss',l:'미판매 점포',f:'int'},{k:'out',l:'이탈 추정',f:'int'},{k:'sus',l:'의심',f:'int'},{k:'slow',l:'부진',f:'int'},{k:'act',l:`최근 ${NSF.N}일 판매`,f:'int'},{k:'hist',l:'취급(판매 이력)',f:'int'},{k:'loss',l:'이탈·의심 월매출',f:'int'}]});
+  table($('ns-t-s'),{key:'id',sort:'st',dir:1,first:1,sel:NSF.store,data:R.storeRows.filter(o=>!qs||o.name.includes(qs)),onClick:id=>{NSF.store=+id;NSF.prod=null;NSF.jd='all';nsDetail();nsMark()},
+    cols:[{k:'name',l:'점포',f:'text'},tierCol(),stCol(),whyCol,{k:'miss',l:'미판매 품목',f:'int'},{k:'out',l:'이탈 추정',f:'int'},{k:'sus',l:'의심',f:'int'},{k:'slow',l:'부진',f:'int'},{k:'act',l:`최근 ${NSF.N}일 판매`,f:'int'},{k:'hist',l:'취급(판매 이력)',f:'int'},{k:'loss',l:'이탈·의심 월매출',f:'int'}]});
+  nsDetail()}
+function nsMark(){$('ns-t-p').querySelectorAll('tbody tr').forEach(tr=>tr.classList.toggle('sel',NSF.prod!=null&&+tr.dataset.id===NSF.prod));$('ns-t-s').querySelectorAll('tbody tr').forEach(tr=>tr.classList.toggle('sel',NSF.store!=null&&+tr.dataset.id===NSF.store));$('ns-t-d').scrollIntoView({behavior:'smooth',block:'start'})}
+function nsDetail(){const R=NS_R;if(!R)return;const q=$('ns-s-d').value.trim();
+  const d=R.pairs.filter(p=>(NSF.store==null||p.s===NSF.store)&&(NSF.prod==null||p.p===NSF.prod)&&(NSF.jd==='all'||p.j===NSF.jd||(NSF.jd==='dead'&&(p.j==='pdead'||p.j==='sdead')))&&(!q||p.store.includes(q)||p.prod.includes(q)));
   const sel=NSF.store!=null?STORES[NSF.store].name:NSF.prod!=null?PRODS[NSF.prod].name:null;
-  $('ns-sel').innerHTML=sel?`<span class="chip">선택: <b>${esc(sel)}</b></span> <button class="btn sm" id="ns-clr">전체 보기</button>`:`<span class="note">${fInt(d.length)}건</span>`;
-  if(sel)$('ns-clr').onclick=()=>{NSF.store=null;NSF.prod=null;renderNS()};
-  table($('ns-t-d'),{key:'id',sort:'preA',first:1,data:d,cols:[{k:'store',l:'점포',f:'text'},{k:'type',l:'유형',f:'text'},{k:'prod',l:'상품명',f:'text',nm:1},{k:'sub',l:'소분류',f:'text'},
-    {k:'streak',l:'연속 미매출',f:'html',h:r=>`<b class="${r.streak>=14?'up':''}">${r.streak}일</b>`,v:r=>r.streak,csv:r=>r.streak},{k:'lastd',l:'마지막 판매일',f:'html',tl:1,h:lastTxt,v:r=>r.last,csv:lastTxt},
-    {k:'preQ',l:'수량',f:'int',g:'직전 30일 실적'},{k:'preA',l:'금액',f:'int',g:'직전 30일 실적'},{k:'avg',l:'일평균 수량',f:'html',g:'직전 30일 실적',h:r=>r.avg.toFixed(1),v:r=>r.avg,csv:r=>r.avg.toFixed(2)},{k:'exp',l:`${NS_DAYS}일 기대 수량`,f:'html',g:'직전 30일 실적',h:r=>{const e=r.avg*NS_DAYS;return`<span class="${e>=2?'up':'flat'}">${e.toFixed(1)}개</span>`},v:r=>r.avg*NS_DAYS,csv:r=>(r.avg*NS_DAYS).toFixed(1)}]});
-  // 다른 표의 선택 표시 갱신
-  $('ns-t-s').querySelectorAll('tbody tr').forEach(tr=>tr.classList.toggle('sel',NSF.store!=null&&+tr.dataset.id===NSF.store));
-  $('ns-t-p').querySelectorAll('tbody tr').forEach(tr=>tr.classList.toggle('sel',NSF.prod!=null&&+tr.dataset.id===NSF.prod))}
-$('ns-str').querySelectorAll('button').forEach(b=>b.onclick=()=>{NSF.strong=b.dataset.v==='1';$('ns-str').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));nsWin();nsDetail(nsCompute())});
-$('ns-days').querySelectorAll('button').forEach(b=>b.onclick=()=>{NS_DAYS=+b.dataset.v;$('ns-days').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));NSF.store=null;NSF.prod=null;renderNS()});
-$('ns-s-s').addEventListener('input',renderNS);$('ns-s-p').addEventListener('input',renderNS);$('ns-s-d').addEventListener('input',()=>{nsWin();nsDetail(nsCompute())});
-const nsSuffix=()=>`${DAYS[NS_WS].m}${String(DAYS[NS_WS].d).padStart(2,'0')}-${DAYS[NS_WE].m}${String(DAYS[NS_WE].d).padStart(2,'0')}`;
-$('ns-x-s').onclick=()=>csv($('ns-t-s'),'이마트_미매출_점포별',nsSuffix());$('ns-x-p').onclick=()=>csv($('ns-t-p'),'이마트_미매출_품목별',nsSuffix());$('ns-x-d').onclick=()=>csv($('ns-t-d'),'이마트_미매출_점포x품목',nsSuffix());
-function renderSheet(){if($('sh-ns').classList.contains('on'))renderNS();else if($('sh-pr').classList.contains('on'))renderPRO();else renderTab()}
+  $('ns-sel').innerHTML=(sel?`<span class="chip">선택: <b>${esc(sel)}</b></span> <button class="btn sm" id="ns-clr">전체 보기</button> `:'')+`<span class="note">${fInt(d.length)}건</span>`;
+  if(sel)$('ns-clr').onclick=()=>{NSF.store=null;NSF.prod=null;nsDetail();nsMark()};
+  const jc={all:R.pairs.length,out:R.c.out,sus:R.c.sus,slow:R.c.slow,dead:R.c.pdead+R.c.sdead};
+  $('ns-jd').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.v===NSF.jd);b.querySelector('small').textContent=fInt(jc[b.dataset.v])});
+  table($('ns-t-d'),{key:'id',sort:'ord',dir:1,first:1,data:d,cols:[
+    {k:'store',l:'점포',f:'text'},{k:'tier',l:'등급',f:'html',h:r=>tierH(r.s),v:r=>(TIER.get(r.s)||'Z')+String(RANK.get(r.s)||999).padStart(3,'0'),csv:r=>TIER.get(r.s)||''},
+    {k:'prod',l:'상품명',f:'text',nm:1},
+    {k:'ord',l:'판정',f:'html',h:r=>nsJ(r.j),v:r=>r.ord*1e9-(r.E||0)*1e3-r.mon/1e6,csv:r=>NS_J[r.j].l},
+    {k:'why',l:'근거',f:'html',tl:1,cls:'why',h:r=>`${esc(r.why)}<br><span class="flat">${esc(r.whyS)}</span>`,v:r=>r.why,csv:r=>r.why+' / '+r.whyS},
+    {k:'streak',l:'연속 미판매',f:'html',h:r=>`<b class="${r.streak>=15?'up':''}">${r.streak}일</b>`,v:r=>r.streak,csv:r=>r.streak},
+    {k:'lastd',l:'마지막 판매일',f:'html',tl:1,h:r=>dLab(r.last),v:r=>r.last,csv:r=>dLab(r.last)},
+    {k:'wk',l:'평소 주 판매',f:'html',h:r=>r.wk==null?'<span class="flat">-</span>':r.wk.toFixed(1)+'개',v:r=>r.wk??-1,csv:r=>r.wk==null?'':r.wk.toFixed(2)},
+    {k:'E',l:'기대 수량',f:'html',h:r=>r.E==null?'<span class="flat">-</span>':r.E.toFixed(1)+'개',v:r=>r.E??-1,csv:r=>r.E==null?'':r.E.toFixed(2)},
+    {k:'mon',l:'평소 월매출',f:'int'}]})}
+$('ns-n').querySelectorAll('button').forEach(b=>b.onclick=()=>{NSF.N=+b.dataset.v;$('ns-n').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));NSF.store=null;NSF.prod=null;renderNS()});
+$('ns-jd').querySelectorAll('button').forEach(b=>b.onclick=()=>{NSF.jd=b.dataset.v;nsDetail()});
+$('ns-s-p').addEventListener('input',renderNS);$('ns-s-s').addEventListener('input',renderNS);$('ns-s-d').addEventListener('input',nsDetail);
+const nsSuffix=()=>`기준${DAYS[LAST].m}${String(DAYS[LAST].d).padStart(2,'0')}_${NSF.N}일`;
+$('ns-x-s').onclick=()=>csv($('ns-t-s'),'이마트_미판매_점포별',nsSuffix());$('ns-x-p').onclick=()=>csv($('ns-t-p'),'이마트_미판매_품목별',nsSuffix());$('ns-x-d').onclick=()=>csv($('ns-t-d'),'이마트_미판매_점포x품목',nsSuffix());
+function renderSheet(){const ns=$('sh-ns').classList.contains('on');document.body.classList.toggle('ns-on',ns);if(ns)renderNS();else if($('sh-pr').classList.contains('on'))renderPRO();else renderTab()}
 nsBuildFilters();
 
 /* ================= 시트: 행사현황 ================= */
